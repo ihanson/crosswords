@@ -6,6 +6,7 @@ import re
 import json
 import base64
 import urllib.parse
+import jpz
 
 WHITE_SQUARE = 1
 CIRCLED_SQUARE = 2
@@ -42,6 +43,12 @@ def dict_to_square(obj: dict) -> crossword.Square:
 	else:
 		return crossword.BlackSquare()
 
+def dict_to_clue(obj: dict) -> crossword.Clue:
+	return crossword.Clue(
+		obj["text"][0]["plain"],
+		obj["text"][0].get("formatted")
+	)
+
 def puzzle(date: datetime.date, puzzle_type: str, nyt_s: str) -> crossword.Puzzle:
 	obj = requests.get(
 		f"https://www.nytimes.com/svc/crosswords/v6/puzzle/{puzzle_type}/{date.isoformat()}.json",
@@ -54,21 +61,21 @@ def puzzle(date: datetime.date, puzzle_type: str, nyt_s: str) -> crossword.Puzzl
 	height = puzzle_dict["dimensions"]["height"]
 	return crossword.Puzzle(
 		grid=crossword.Grid([
-			[dict_to_square(puzzle_dict["cells"][row * width + col])
-			 for col in range(width)]
+			[dict_to_square(puzzle_dict["cells"][row * width + col]) for col in range(width)]
 			for row in range(height)
 		]),
 		across={
-			int(puzzle_dict["clues"][i]["label"]): puzzle_dict["clues"][i]["text"][0]["plain"]
+			int(puzzle_dict["clues"][i]["label"]): dict_to_clue(puzzle_dict["clues"][i])
 			for i in puzzle_dict["clueLists"][0]["clues"]
 		},
 		down={
-			int(puzzle_dict["clues"][i]["label"]): puzzle_dict["clues"][i]["text"][0]["plain"]
-			for i in puzzle_dict["clueLists"][0]["clues"]
+			int(puzzle_dict["clues"][i]["label"]): dict_to_clue(puzzle_dict["clues"][i])
+			for i in puzzle_dict["clueLists"][1]["clues"]
 		},
 		title=obj.get("title"),
 		author=obj["constructors"][0] if "constructors" in obj else None,
-		copyright=obj.get("copyright")
+		copyright=obj.get("copyright"),
+		note=obj["notes"][0]["text"] if "notes" in obj else None
 	)
 
 def acrostic_data(date: datetime.date, nyt_s: str) -> dict:
@@ -85,5 +92,6 @@ def acrostic_data(date: datetime.date, nyt_s: str) -> dict:
 if __name__ == "__main__":
 	with open("nyt-s.txt", encoding="utf-8") as f:
 		nyt_s = f.read()
-	p = puzzle(datetime.date(2023, 1, 26), "daily", nyt_s)
+	p = puzzle(datetime.date(2022, 7, 17), "daily", nyt_s)
 	image.draw_grid(p.grid, "puzzles\\daily.png")
+	jpz.save_jpz(p, "puzzles\\daily.jpz")

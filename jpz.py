@@ -1,17 +1,26 @@
-import xml.etree.ElementTree as ET 
+import xml.etree.ElementTree as ET
+from lxml import html as lxml_html, etree as lxml_etree
+import html
 import crossword
-import puz
 import image
 
+def element_with_raw_html(tag: str, raw_html: str | None, alternative_text: str):
+	html_str = f"<{tag}>{raw_html}</{tag}>"
+	if raw_html is not None:	
+		try:
+			return ET.fromstring(lxml_etree.tostring(lxml_html.fromstring(html_str)))
+		except:
+			pass
+	element = ET.Element(tag)
+	element.text = alternative_text
+	return element
+
 def clue_element(clue: crossword.Clue, word_id: int, clue_number: int):
-	element = ET.Element("clue", {
+	element = element_with_raw_html("clue", clue.clue_html, clue.clue)
+	element.attrib = {
 		"word": str(word_id),
 		"number": str(clue_number)
-	})
-	if clue.is_special:
-		ET.SubElement(element, "i").text = clue.clue
-	else:
-		element.text = clue.clue
+	}
 	return element
 
 def save_jpz(puzzle: crossword.Puzzle, file_path: str, shade=image.Color(0xff, 0xff, 0x00)):
@@ -30,7 +39,8 @@ def save_jpz(puzzle: crossword.Puzzle, file_path: str, shade=image.Color(0xff, 0
 	if puzzle.copyright is not None:
 		ET.SubElement(metadata, "copyright").text = puzzle.copyright
 	if puzzle.note is not None:
-		ET.SubElement(metadata, "description").text = puzzle.note
+		note_html = html.escape(puzzle.note).replace("\n", "<br>")
+		metadata.append(element_with_raw_html("description", note_html, puzzle.note))
 	
 	crossword_el = ET.SubElement(puzzle_el, "crossword")
 	grid = ET.SubElement(crossword_el, "grid", {

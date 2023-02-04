@@ -25,17 +25,17 @@ class WhiteSquare(Square):
 		return self.__is_circled
 
 class Clue(object):
-	def __init__(self, clue: str, is_special: bool = False):
+	def __init__(self, clue: str, clue_html: str | None = None):
 		self.__clue = clue
-		self.__is_special = is_special
+		self.__clue_html = clue_html
 
 	@property
 	def clue(self):
 		return self.__clue
 
 	@property
-	def is_special(self):
-		return self.__is_special
+	def clue_html(self):
+		return self.__clue_html
 
 class Grid(object):
 	def __init__(self, squares: list[list[Square]]):
