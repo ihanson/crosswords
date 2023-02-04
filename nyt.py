@@ -79,7 +79,7 @@ def read_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword
 			for i in puzzle_dict["clueLists"][1]["clues"]
 		},
 		title=obj.get("title"),
-		author=obj["constructors"][0] if "constructors" in obj else None,
+		author=", ".join(obj["constructors"]) if "constructors" in obj else None,
 		copyright=format_date(datetime.date.fromisoformat(obj["publicationDate"])),
 		note=obj["notes"][0]["text"] if "notes" in obj else None
 	)
@@ -106,6 +106,9 @@ def pdf_data(date: datetime.date, publish_type: str, nyt_s: str) -> bytes:
 		raise Exception(f"Could not download {url}")
 	return response.content
 
+def safe_filename(name: str) -> str:
+	return re.sub(r"[^\w. -]", "_", name.strip())
+
 def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: str):
 	for year in range(start_year, end_year + 1):
 		year_start = datetime.date(year, 1, 1)
@@ -123,7 +126,7 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 			path = os.path.join(
 				destination,
 				"PDF" if format_type == "PDF" else "Solved" if puzzle["solved"] else "Unsolved",
-				"Bonus" if publish_type == "Bonus" else title.strip(),
+				"Bonus" if publish_type == "Bonus" else safe_filename(title),
 				f"{print_date.year}"
 			)
 			try:
@@ -131,12 +134,11 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 				if format_type == "Normal":
 					jpz.save_jpz(
 						read_puzzle(print_date, publish_type.lower(), nyt_s),
-						os.path.join(path, f"{print_date.isoformat()} {title}.jpz")
+						os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.jpz")
 					)
 				elif format_type == "PDF":
-					with open(os.path.join(path, f"{print_date.isoformat()} {title}.pdf"), "wb") as f:
+					with open(os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.pdf"), "wb") as f:
 						f.write(pdf_data(print_date, publish_type, nyt_s))
-				sys.stderr.write(f"Downloaded puzzle {title} for {print_date.isoformat()}\n")
 			except Exception as e:
 				sys.stderr.write(f"Error downloading puzzle {title} for {print_date.isoformat()}: {e}\n")
 
@@ -145,4 +147,4 @@ def token() -> str:
 		return f.read()
 
 if __name__ == "__main__":
-	download_puzzles("puzzles\\nyt", 2022, 2022, token())
+	download_puzzles("puzzles\\New York Times", 1997, 2023, token())
