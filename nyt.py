@@ -1,6 +1,8 @@
 import datetime
 import requests
 import crossword
+import acrostic
+import string
 import re
 import json
 import base64
@@ -32,7 +34,7 @@ def puzzles_for_dates(
 		}, headers={
 			"nyt-s": nyt_s
 		} if nyt_s is not None else None
-	).json()["results"]
+	).json()["results"] or []
 
 def dict_to_square(obj: dict) -> crossword.Square:
 	if "type" in obj:
@@ -54,7 +56,7 @@ def dict_to_clue(obj: dict) -> crossword.Clue:
 def format_date(date: datetime.date):
 	return f"{date.strftime('%A, %B')} {date.day}, {date.year}"
 
-def read_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword.Puzzle:
+def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword.Puzzle:
 	obj = requests.get(
 		f"https://www.nytimes.com/svc/crosswords/v6/puzzle/{publish_type}/{date.isoformat()}.json",
 		cookies={
@@ -84,7 +86,7 @@ def read_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword
 		note=obj["notes"][0]["text"] if "notes" in obj else None
 	)
 
-def acrostic_data(date: datetime.date, nyt_s: str) -> dict:
+def download_acrostic(date: datetime.date, nyt_s: str) -> acrostic.Acrostic:
 	html_data = requests.get(
 		f"https://www.nytimes.com/puzzles/acrostic/{date.year:0>4}/{date.month:0>2}/{date.day:0>2}",
 		cookies={
@@ -92,8 +94,34 @@ def acrostic_data(date: datetime.date, nyt_s: str) -> dict:
 		}
 	).text
 	b64_data = json.loads(re.search(r"window\.gameData\s+=\s+(\".*?\")", html_data)[1])
-	json_data = urllib.parse.unquote(base64.b64decode(b64_data).decode("ascii"))
-	return json.loads(json_data)
+	game_data = json.loads(urllib.parse.unquote(base64.b64decode(b64_data).decode("ascii")))
+	puzzle_data = game_data["puzzle_data"].split("\n")
+	letter_line = puzzle_data[0]
+	length = len(letter_line) // 3
+	letters = list(zip(
+		letter_line[:length],
+		letter_line[length:length * 2],
+		letter_line[length * 2:]
+	))
+	clues = puzzle_data[1].strip("|").split("|")
+	return acrostic.Acrostic(
+		squares=[
+			acrostic.LetterSquare(
+				char,
+				ord(clue_index) - 65,
+				ord(word_index) - 65
+			) if char in string.ascii_uppercase
+			else acrostic.PunctuationSquare(char)
+			for (char, clue_index, word_index) in letters
+		],
+		clues=clues,
+		quote_text=puzzle_data[3],
+		quote_author=puzzle_data[4],
+		quote_work=puzzle_data[5],
+		title=game_data["puzzle_meta"]["title"],
+		author=game_data["puzzle_meta"]["author"],
+		copyright=game_data["puzzle_meta"]["displayDate"]
+	)
 
 def pdf_data(date: datetime.date, publish_type: str, nyt_s: str) -> bytes:
 	date_str = MONTHS[date.month - 1] + date.strftime("%d%y")
@@ -115,7 +143,7 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 		year_end = datetime.date(year, 12, 31)
 		puzzles = (
 			puzzles_for_dates(year_start, year_end, publish_type="bonus", nyt_s=nyt_s)
-			# + puzzles_for_dates(year_start, year_end, format_type="acrostic", nyt_s=nyt_s)
+			+ puzzles_for_dates(year_start, year_end, format_type="acrostic", nyt_s=nyt_s)
 			+ puzzles_for_dates(year_start, year_end, format_type="pdf,normal,diagramless", publish_type="variety,assorted", nyt_s=nyt_s)
 		)
 		for puzzle in puzzles:
@@ -132,13 +160,18 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 			try:
 				os.makedirs(path, exist_ok=True)
 				if format_type == "Normal":
-					jpz.save_jpz(
-						read_puzzle(print_date, publish_type.lower(), nyt_s),
+					jpz.save_crossword_jpz(
+						download_puzzle(print_date, publish_type.lower(), nyt_s),
 						os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.jpz")
 					)
 				elif format_type == "PDF":
 					with open(os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.pdf"), "wb") as f:
 						f.write(pdf_data(print_date, publish_type, nyt_s))
+				elif format_type == "Acrostic":
+					jpz.save_acrostic_jpz(
+						download_acrostic(print_date, nyt_s),
+						os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.jpz")
+					)
 			except Exception as e:
 				sys.stderr.write(f"Error downloading puzzle {title} for {print_date.isoformat()}: {e}\n")
 
@@ -147,4 +180,5 @@ def token() -> str:
 		return f.read()
 
 if __name__ == "__main__":
-	download_puzzles("puzzles\\New York Times", 1997, 2023, token())
+	#download_puzzles("puzzles\\New York Times", 1997, 2023, token())
+	jpz.save_acrostic_jpz(download_acrostic(datetime.date(2023,1,1), token()), "puzzles\\acrostic.jpz")
