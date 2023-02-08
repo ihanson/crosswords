@@ -9,6 +9,7 @@ import string
 
 NUM_COLS = 3
 GRID_WORD_ID = "1000"
+ATTRIB_WORD_ID = "1001"
 
 def element_with_raw_html(tag: str, raw_html: str | None, alternative_text: str):
 	html_str = f"<{tag}>{raw_html}</{tag}>"
@@ -144,7 +145,7 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 	width = max((col_width + 1) * NUM_COLS - 1, 30)
 	quote_height = (len(puzzle.squares) - 1) // width + 1
 	clue_height = (len(puzzle.clues) // NUM_COLS) + (len(puzzle.clues) % NUM_COLS)
-	height = quote_height + 1 + clue_height
+	height = quote_height + 3 + clue_height
 	grid_el = ET.SubElement(acrostic_el, "grid", {
 		"width": str(width),
 		"height": str(height)
@@ -152,6 +153,8 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 	ET.SubElement(grid_el, "grid-look", {
 		"numbering-scheme": "normal"
 	})
+	clues_el = ET.Element("clues")
+	ET.SubElement(clues_el, "title").text = "Clues"
 	count = 0
 	cells: dict[Tuple[int, int], ET.Element] = {}
 	rev: dict[Tuple[int, int], Tuple[str, int]] = {}
@@ -180,12 +183,22 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 					"type": "clue",
 					"solve-state": square.punctuation
 				})
-	clues_el = ET.Element("clues")
-	ET.SubElement(clues_el, "title").text = "Clues"
-	first_clue_row = quote_height + 1
+	attrib_row = quote_height + 1
+	first_clue_row = attrib_row + 2
+	attrib_word_el = ET.SubElement(acrostic_el, "word", {
+		"id": ATTRIB_WORD_ID
+	})
 	for clue_index in range(len(puzzle.clues)):
-		col_index = clue_index // clue_height
-		clue_x = (col_width + 1) * col_index
+		(first_letter, first_letter_index) = rev[(clue_index, 0)]
+		cells[(clue_index, attrib_row)] = ET.Element("cell", {
+			"solution": first_letter,
+			"number": str(first_letter_index)
+		})
+		ET.SubElement(attrib_word_el, "cells", {
+			"x": str(clue_index + 1),
+			"y": str(attrib_row + 1)
+		})
+		clue_x = (col_width + 1) * (clue_index // clue_height)
 		clue_y = first_clue_row + (clue_index % clue_height)
 		cells[(clue_x, clue_y)] = ET.Element("cell", {
 			"solution": string.ascii_uppercase[clue_index],
@@ -236,7 +249,11 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 	ET.SubElement(clues_el, "clue", {
 		"word": GRID_WORD_ID,
 		"number": ""
-	}).text = "[QUOTE]"
+	}).text = "[Quote]"
+	ET.SubElement(clues_el, "clue", {
+		"word": ATTRIB_WORD_ID,
+		"number": ""
+	}).text = "[Author and title]"
 	acrostic_el.append(clues_el)
 	ET.ElementTree(root).write(file_path, xml_declaration=True, encoding="utf-8")
 
