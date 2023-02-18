@@ -256,7 +256,3 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 	}).text = "[Author and title]"
 	acrostic_el.append(clues_el)
 	ET.ElementTree(root).write(file_path, xml_declaration=True, encoding="utf-8")
-
-if __name__ == "__main__":
-	a = acrostic.Acrostic([acrostic.LetterSquare("X",0,0)], ["x"], "\"x\"", "by x", "from x", "basic", "author", "copy")
-	save_acrostic_jpz(a, "puzzles\\acrostic.jpz")

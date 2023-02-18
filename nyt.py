@@ -123,10 +123,11 @@ def download_acrostic(date: datetime.date, nyt_s: str) -> acrostic.Acrostic:
 		copyright=game_data["puzzle_meta"]["displayDate"]
 	)
 
-def pdf_data(date: datetime.date, publish_type: str, nyt_s: str) -> bytes:
+def pdf_data(date: datetime.date, publish_type: str, answer: bool, nyt_s: str) -> bytes:
 	date_str = MONTHS[date.month - 1] + date.strftime("%d%y")
 	publish_ext = ".2" if publish_type == "Variety" else ".3" if publish_type == "Assorted" else ""
-	url = f"https://www.nytimes.com/svc/crosswords/v2/puzzle/print/{date_str}{publish_ext}.pdf"
+	answer_ext = ".ans" if answer else ""
+	url = f"https://www.nytimes.com/svc/crosswords/v2/puzzle/print/{date_str}{publish_ext}{answer_ext}.pdf"
 	response = requests.get(url, cookies = {
 		"nyt-s": nyt_s
 	})
@@ -166,7 +167,12 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 					)
 				elif format_type == "PDF":
 					with open(os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.pdf"), "wb") as f:
-						f.write(pdf_data(print_date, publish_type, nyt_s))
+						f.write(pdf_data(print_date, publish_type, False, nyt_s))
+					try:
+						answer_data = pdf_data(print_date, publish_type, True, nyt_s)
+						with open(os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)} Answer.pdf"), "wb") as f:
+							f.write(answer_data)
+					except: pass
 				elif format_type == "Acrostic":
 					jpz.save_acrostic_jpz(
 						download_acrostic(print_date, nyt_s),
@@ -180,5 +186,4 @@ def token() -> str:
 		return f.read()
 
 if __name__ == "__main__":
-	#download_puzzles("puzzles\\New York Times", 1997, 2023, token())
-	jpz.save_acrostic_jpz(download_acrostic(datetime.date(2023,1,1), token()), "puzzles\\acrostic.jpz")
+	download_puzzles("puzzles\\New York Times", 1997, 2023, token())

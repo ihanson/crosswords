@@ -62,6 +62,3 @@ def clue_nums(grid: crossword.Grid) -> tuple[list[int], list[int]]:
 					down.append(clue_num)
 				clue_num += 1
 	return (across, down)
-
-if __name__ == "__main__":
-	puz.save_puz(load_text("puzzles\\cryptic.txt"), "puzzles\\cryptic.puz")
