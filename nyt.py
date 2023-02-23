@@ -152,11 +152,12 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 			format_type = puzzle["format_type"]
 			publish_type = puzzle["publish_type"]
 			title = puzzle["title"]
-			is_pdf = format_type == "PDF" or format_type == "Diagramless"
 			path = os.path.join(
 				destination,
-				"PDF" if is_pdf else "Solved" if puzzle["solved"] else "Unsolved",
-				"Bonus" if publish_type == "Bonus" else safe_filename(title),
+				"PDFs" if format_type == "PDF" or format_type == "Diagramless"
+					else "Bonus" if publish_type == "Bonus"
+					else "Acrostic" if format_type == "Acrostic"
+					else "Variety",
 				f"{print_date.year}"
 			)
 			try:
@@ -171,7 +172,9 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 						f.write(pdf_data(print_date, publish_type, False, nyt_s))
 					try:
 						answer_data = pdf_data(print_date, publish_type, True, nyt_s)
-						with open(os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)} Answer.pdf"), "wb") as f:
+						answer_dir = os.path.join(path, "Answers")
+						os.makedirs(answer_dir, exist_ok=True)
+						with open(os.path.join(answer_dir, f"{print_date.isoformat()} {safe_filename(title)} Answer.pdf"), "wb") as f:
 							f.write(answer_data)
 					except: pass
 				elif format_type == "Acrostic":
