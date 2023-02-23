@@ -152,9 +152,10 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 			format_type = puzzle["format_type"]
 			publish_type = puzzle["publish_type"]
 			title = puzzle["title"]
+			is_pdf = format_type == "PDF" or format_type == "Diagramless"
 			path = os.path.join(
 				destination,
-				"PDF" if format_type == "PDF" else "Solved" if puzzle["solved"] else "Unsolved",
+				"PDF" if is_pdf else "Solved" if puzzle["solved"] else "Unsolved",
 				"Bonus" if publish_type == "Bonus" else safe_filename(title),
 				f"{print_date.year}"
 			)
