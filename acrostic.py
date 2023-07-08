@@ -1,7 +1,8 @@
 from typing import Tuple
 
 class AcrosticSquare(object):
-	pass
+	def letter(self) -> str:
+		raise NotImplementedError()
 
 class PunctuationSquare(AcrosticSquare):
 	def __init__(self, punctuation: str):
@@ -10,6 +11,9 @@ class PunctuationSquare(AcrosticSquare):
 	@property
 	def punctuation(self):
 		return self.__punctuation
+	
+	def letter(self) -> str:
+		return self.punctuation
 
 class LetterSquare(AcrosticSquare):
 	def __init__(self, answer: str, clue_index: int, clue_word_index: int):
@@ -28,6 +32,9 @@ class LetterSquare(AcrosticSquare):
 	@property
 	def clue_word_index(self):
 		return self.__clue_word_index
+	
+	def letter(self) -> str:
+		return self.answer
 
 class Acrostic(object):
 	def __init__(

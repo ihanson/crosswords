@@ -100,10 +100,19 @@ def download_acrostic(date: datetime.date) -> acrostic.Acrostic:
 			headers={"Referer": page_url}
 		).text
 	)
-	quote_with_attr = data["quote"]
-	quote_match = re.match(r"^(.*?),\s*(.*?)\s*(?:--|\u2014)\s*(.*)$", html.unescape(quote_with_attr))
-	if quote_match is None:
-		raise Exception(f"Could not parse quote: {quote_with_attr}")
+	quote_with_attr = html.unescape(data["quote"])
+	if match := re.match(r"^(.*?)\s*[,:]\s*(.*?)\s*(?:--?|\u2014)\s*([\s\S]*)$", quote_with_attr):
+		quote_author = match[1]
+		quote_work = match[2]
+		quote_text = match[3]
+	elif match := re.match(r"^(.*?)\s*(?:--?|\u2014)\s*([\s\S]*)$", quote_with_attr):
+		quote_author = None
+		quote_work = match[1]
+		quote_text = match[2]
+	else:
+		quote_author = None
+		quote_work = None
+		quote_text = quote_with_attr
 	return acrostic.Acrostic(
 		squares=[
 			(
@@ -120,9 +129,9 @@ def download_acrostic(date: datetime.date) -> acrostic.Acrostic:
 			)
 		],
 		clues=[html.unescape(clue) for clue in data["clues"]],
-		quote_text=quote_match[3],
-		quote_author=quote_match[1],
-		quote_work=quote_match[2],
+		quote_text=quote_text,
+		quote_author=quote_author,
+		quote_work=quote_work,
 		title=title,
 		author=author,
 		copyright=data["copyright"]

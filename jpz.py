@@ -123,9 +123,14 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 		"xmlns": "http://crossword.info/xml/crossword-compiler"
 	})
 	settings_el = ET.SubElement(root, "applet-settings")
+	attribution = (
+		f"\n\n\u2014 {puzzle.quote_author}, {puzzle.quote_work}" if puzzle.quote_author and puzzle.quote_work
+		else f"\n\n\u2014 {puzzle.quote_work}" if puzzle.quote_work
+		else ""
+	)
 	ET.SubElement(settings_el, "completion", {
 		"only-if-correct": "true"
-	}).text = f"{puzzle.quote_text}\n\n\u2014 {puzzle.quote_author}, {puzzle.quote_work}"
+	}).text = f"{puzzle.quote_text}{attribution}"
 	actions_el = ET.SubElement(settings_el, "actions")
 	ET.SubElement(actions_el, "reveal-word")
 	ET.SubElement(actions_el, "reveal-letter")

@@ -53,8 +53,8 @@ def dict_to_clue(obj: dict) -> crossword.Clue:
 		obj["text"][0].get("formatted")
 	)
 
-def format_date(date: datetime.date):
-	return f"{date.strftime('%A, %B')} {date.day}, {date.year}"
+def format_date(date: datetime.date, weekday=True):
+	return f"{date.strftime('%A, %B' if weekday else '%B')} {date.day}, {date.year}"
 
 def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword.Puzzle:
 	obj = requests.get(
@@ -94,7 +94,38 @@ def download_acrostic(date: datetime.date, nyt_s: str) -> acrostic.Acrostic:
 		}
 	).text
 	b64_data = json.loads(re.search(r"window\.gameData\s+=\s+(\".*?\")", html_data)[1])
-	game_data = json.loads(urllib.parse.unquote(base64.b64decode(b64_data).decode("ascii")))
+	return json_to_acrostic(urllib.parse.unquote(base64.b64decode(b64_data).decode("ascii")))
+
+def acrostic_to_json(puzzle: acrostic.Acrostic, date: datetime.date) -> str:
+	answer = "".join(square.letter() for square in puzzle.squares)
+	clue_indexes = "".join(
+		string.ascii_uppercase[square.clue_index] if isinstance(square, acrostic.LetterSquare)
+		else square.letter()
+		for square in puzzle.squares
+	)
+	clue_word_indexes = "".join(
+		string.ascii_uppercase[square.clue_word_index] if isinstance(square, acrostic.LetterSquare)
+		else square.letter()
+		for square in puzzle.squares
+	)
+	return json.dumps({
+		"puzzle_data": "\n".join((
+			"".join((answer, clue_indexes, clue_word_indexes)),
+			"|".join(puzzle.clues),
+			"",
+			puzzle.quote_work or "",
+			puzzle.quote_author or "",
+			puzzle.quote_work or ""
+		)),
+		"puzzle_meta": {
+			"title": puzzle.title,
+			"author": puzzle.author,
+			"displayDate": format_date(date, False)
+		}
+	})
+
+def json_to_acrostic(game_json: str) -> acrostic.Acrostic:
+	game_data = json.loads(game_json)
 	puzzle_data = game_data["puzzle_data"].split("\n")
 	letter_line = puzzle_data[0]
 	length = len(letter_line) // 3
@@ -110,7 +141,7 @@ def download_acrostic(date: datetime.date, nyt_s: str) -> acrostic.Acrostic:
 				char,
 				ord(clue_index) - 65,
 				ord(word_index) - 65
-			) if char in string.ascii_uppercase
+			) if clue_index in string.ascii_uppercase
 			else acrostic.PunctuationSquare(char)
 			for (char, clue_index, word_index) in letters
 		],
