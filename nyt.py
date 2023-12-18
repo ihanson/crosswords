@@ -40,7 +40,7 @@ def dict_to_square(obj: dict) -> crossword.Square:
 	if "type" in obj:
 		cell_type = obj["type"]
 		return crossword.WhiteSquare(
-			answer=obj["answer"],
+			answer=obj.get("answer"),
 			is_shaded=cell_type == SHADED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE,
 			is_circled=cell_type == CIRCLED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE
 		)
