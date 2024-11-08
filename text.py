@@ -1,5 +1,4 @@
 import crossword
-import puz
 
 def load_text(file_path: str) -> crossword.Puzzle:
 	with open(file_path, "r", encoding="utf-8") as reader:
@@ -20,10 +19,13 @@ def load_text(file_path: str) -> crossword.Puzzle:
 		across: dict[int, str] = {}
 		down: dict[int, str] = {}
 		for clue in across_nums:
-			across[clue] = crossword.Clue(reader.readline().strip("\r\n"))
+			across[clue] = crossword.Clue(*p(reader.readline().strip("\r\n")))
 		for clue in down_nums:
-			down[clue] = crossword.Clue(reader.readline().strip("\r\n"))
+			down[clue] = crossword.Clue(*p(reader.readline().strip("\r\n")))
 		return crossword.Puzzle(grid, across, down, title, author, copyright, note)
+
+def p(text):
+	return tuple(text.split("|"))
 
 def save_text(puzzle: crossword.Puzzle, file_path: str):
 	with open(file_path, "w", encoding="utf-8") as writer:
@@ -62,3 +64,7 @@ def clue_nums(grid: crossword.Grid) -> tuple[list[int], list[int]]:
 					down.append(clue_num)
 				clue_num += 1
 	return (across, down)
+
+if __name__ == "__main__":
+	import jpz
+	jpz.save_crossword_jpz(load_text("puzzles/script.txt"), "puzzles/script.jpz")
