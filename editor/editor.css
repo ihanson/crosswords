@@ -1,0 +1,55 @@
+.grid > div {
+	--cell-size: 30px;
+	line-height: 0;
+
+	> div {
+		box-sizing: border-box;
+		display: inline-block;
+		height: var(--cell-size);
+		width: var(--cell-size);
+		border: 0.5px solid black;
+		vertical-align: top;
+		position: relative;
+
+		&.white {
+			background-color: white;
+		}
+
+		&.circle::after {
+			height: 100%;
+			width: 100%;
+			vertical-align: bottom;
+			line-height: 0;
+			display: inline-block;
+			box-sizing: border-box;
+			border: 1px solid darkblue;
+			border-radius: 50%;
+			content: "";
+		}
+
+		&:not(.white) {
+			background-color: black;
+		}
+
+		&:focus {
+			&.white {
+				background-color: yellow;
+			}
+			
+			&:not(.white) {
+				background-color: blue;
+			}
+
+			outline: none;
+		}
+
+		> .number {
+			font-size: calc(var(--cell-size) / 3);
+			line-height: calc(var(--cell-size) / 3);
+			position: absolute;
+			left: 1px;
+			cursor: default;
+			font-family: sans-serif;
+		}
+	}
+}
