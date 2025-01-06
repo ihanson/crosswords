@@ -136,3 +136,8 @@ def download_acrostic(date: datetime.date) -> acrostic.Acrostic:
 		author=author,
 		copyright=data["copyright"]
 	)
+
+if __name__ == "__main__":
+	import jpz
+	date = datetime.date(2025, 1, 19)
+	jpz.save_crossword_jpz(download_puzzle("Variety", date), f"puzzles\\Variety {date.isoformat()}.jpz")
