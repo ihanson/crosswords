@@ -64,17 +64,19 @@ def format_date(date: datetime.date) -> str:
 
 def clues_dict(div) -> dict[int, crossword.Clue]:
 	return {
-		number: crossword.Clue(clue)
-		for (number, clue) in clue_pairs(
+		number: crossword.Clue(clue, clue_html)
+		for (number, clue, clue_html) in clue_tuples(
 			div.find("div", class_="numclue")
 		)
 	}
 
-def clue_pairs(clue_div):
+def clue_tuples(clue_div):
 	for i in range(0, len(clue_div.contents), 2):
+		clue_nodes = clue_div.contents[i + 1].contents[:-1]
 		yield (
 			int(clue_div.contents[i].get_text()),
-			clue_div.contents[i + 1].contents[0].get_text()[:-3]
+			"".join(node.text for node in clue_nodes)[:-3],
+			"".join(str(node) for node in clue_nodes)[:-3]
 		)
 
 def save_variety(date: datetime.date):
