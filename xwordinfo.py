@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 import crossword
 import jpz
 import acrostic
+import lzstring
 
 def download_puzzle(type: str, date: datetime.date) -> crossword.Puzzle:
 	soup = BeautifulSoup(
@@ -97,10 +98,14 @@ def download_acrostic(date: datetime.date) -> acrostic.Acrostic:
 	title = soup.find("h1").get_text()
 	author = re.match(r"^by (.*?), edited", soup.find_all("h2")[0].get_text())[1]
 	data = json.loads(
-		requests.get(
-			f"https://www.xwordinfo.com/JSON/AcrosticData.ashx?date={format_date(date)}",
-			headers={"Referer": page_url}
-		).text
+		lzstring.LZString().decompressFromEncodedURIComponent(
+			json.loads(
+				requests.get(
+					f"https://www.xwordinfo.com/JSON/AcrosticData.ashx?date={format_date(date)}",
+					headers={"Referer": page_url}
+				).text
+			)["data"]
+		)
 	)
 	quote_with_attr = html.unescape(data["quote"])
 	if match := re.match(r"^(.*?)\s*[,:]\s*(.*?)\s*(?:--?|\u2014)\s*([\s\S]*)$", quote_with_attr):
