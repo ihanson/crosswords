@@ -1,6 +1,5 @@
-from typing import Tuple
 import xml.etree.ElementTree as ET
-from lxml import html as lxml_html, etree as lxml_etree
+from bs4 import BeautifulSoup
 import html
 import crossword
 import acrostic
@@ -12,12 +11,11 @@ GRID_WORD_ID = "1000"
 ATTRIB_WORD_ID = "1001"
 
 def element_with_raw_html(tag: str, raw_html: str | None, alternative_text: str):
-	html_str = f"<{tag}>{raw_html}</{tag}>"
-	if raw_html is not None:	
-		try:
-			return ET.fromstring(lxml_etree.tostring(lxml_html.fromstring(html_str)))
-		except:
-			pass
+	if raw_html is not None:
+		return ET.fromstring(BeautifulSoup(
+			f"<{tag}>{raw_html}</{tag}>",
+			"html.parser"
+		).decode_contents())
 	element = ET.Element(tag)
 	element.text = alternative_text
 	return element
@@ -30,7 +28,7 @@ def clue_element(clue: crossword.Clue, word_id: int, clue_number: int):
 	}
 	return element
 
-def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade=image.Color(0xff, 0xff, 0x00)):
+def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade: image.Color = image.Color(0xff, 0xff, 0x00)):
 	root = ET.Element("crossword-compiler-applet", {
 		"xmlns": "http://crossword.info/xml/crossword-compiler"
 	})
@@ -161,9 +159,9 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 	clues_el = ET.Element("clues")
 	ET.SubElement(clues_el, "title").text = "Clues"
 	count = 0
-	cells: dict[Tuple[int, int], ET.Element] = {}
-	rev: dict[Tuple[int, int], Tuple[str, int]] = {}
-	grid_word: list[Tuple[int, int]] = []
+	cells: dict[tuple[int, int], ET.Element] = {}
+	rev: dict[tuple[int, int], tuple[str, int]] = {}
+	grid_word: list[tuple[int, int]] = []
 	for y in range(quote_height):
 		for x in range(width):
 			clue_index = y * width + x

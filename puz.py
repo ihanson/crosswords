@@ -1,7 +1,7 @@
 from io import BufferedReader
 import struct
 from unidecode import unidecode
-from typing import Callable
+from collections.abc import Callable
 import crossword
 
 ENCODING = "ISO-8859-1"
@@ -30,7 +30,7 @@ class ByteGrid(object):
 
 class CString(object):
 	def __init__(self, string: str | bytes):
-		self.__bytes = (unidecode(string).encode(ENCODING) + b"\x00") if isinstance(string, str) else string
+		self.__bytes: bytes = (unidecode(string).encode(ENCODING) + b"\x00") if isinstance(string, str) else string
 		if self.__bytes[-1] != 0:
 			raise Exception("String is not null-terminated")
 
@@ -62,7 +62,7 @@ class CString(object):
 		return str(self) if len(self) > 0 else None
 
 def read_extra_sections(reader: BufferedReader):
-	sections = {}
+	sections: dict[bytes, bytes] = {}
 	while len(title := reader.read(0x04)) > 0:
 		(length, checksum) = struct.unpack("<HH", reader.read(0x04))
 		data = reader.read(length)
@@ -133,8 +133,8 @@ def overall_checksum(
 
 def masked_checksums(
 	cib: bytes, solution: ByteGrid, state: ByteGrid,
-	title: bytes, author: bytes, copyright: bytes,
-	clues: list[CString], notes: bytes
+	title: CString, author: CString, copyright: CString,
+	clues: list[CString], notes: CString
 ):
 	c_cib = cksum_region(cib)
 	c_sol = cksum_region(solution.bytes)
@@ -166,7 +166,7 @@ def read_rebuses(grbs: ByteGrid, rtbl: bytes) -> dict[tuple[int, int], str]:
 		if grbs[row, col] != 0
 	}
 
-def load_clues(grid: crossword.Grid, clue_list: list[bytes]):
+def load_clues(grid: crossword.Grid, clue_list: list[CString]):
 	across: dict[int, crossword.Clue] = {}
 	down: dict[int, crossword.Clue] = {}
 	clue_queue = clue_list[::-1]
@@ -199,7 +199,7 @@ def all_clues(puzzle: crossword.Puzzle):
 	return clues
 
 def encode_grid(grid: crossword.Grid, map_func: Callable[[crossword.Square], int]):
-	result = []
+	result: list[int] = []
 	for row in range(grid.rows):
 		for col in range(grid.cols):
 			result.append(map_func(grid[row, col]))

@@ -1,5 +1,3 @@
-from typing import Optional
-
 class Square(object):
 	pass
 
@@ -7,7 +5,7 @@ class BlackSquare(Square):
 	pass
 
 class WhiteSquare(Square):
-	def __init__(self, answer: Optional[str] = None, is_shaded = False, is_circled = False):
+	def __init__(self, answer: str | None = None, is_shaded: bool = False, is_circled: bool = False):
 		self.__answer = answer
 		self.__is_shaded = is_shaded
 		self.__is_circled = is_circled
@@ -57,7 +55,7 @@ class Grid(object):
 	def cols(self):
 		return len(self.__squares[0])
 
-	def can_enter(self, row, col):
+	def can_enter(self, row: int, col: int):
 		return (
 			0 <= row < self.rows
 			and 0 <= col < self.cols
@@ -81,8 +79,8 @@ class Grid(object):
 class Puzzle(object):
 	def __init__(
 		self, grid: Grid, across: dict[int, Clue], down: dict[int, Clue],
-		title: Optional[str] = None, author: Optional[str] = None,
-		copyright: Optional[str] = None, note: Optional[str] = None
+		title: str | None = None, author: str | None = None,
+		copyright: str | None = None, note: str | None = None
 	):
 		self.__grid = grid
 		self.__across = across

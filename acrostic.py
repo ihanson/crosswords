@@ -1,5 +1,3 @@
-from typing import Tuple
-
 class AcrosticSquare(object):
 	def letter(self) -> str:
 		raise NotImplementedError()

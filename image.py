@@ -1,5 +1,5 @@
-from __future__ import annotations
 from enum import Enum
+from typing import Self
 import math
 from PIL import Image, ImageDraw, ImageFont
 import crossword
@@ -9,14 +9,16 @@ class Shade(Enum):
 	WHITE = 1,
 	SHADED = 2
 
+Pixel = tuple[int, int, int, int]
+
 class Color(object):
-	def __init__(self, red, green, blue):
+	def __init__(self, red: int, green: int, blue: int):
 		self.__red = red
 		self.__green = green
 		self.__blue = blue
 	
 	@staticmethod
-	def from_pixel(pixel):
+	def from_pixel(pixel: Pixel):
 		(red, green, blue, _) = pixel
 		return Color(red, green, blue)
 	
@@ -26,7 +28,7 @@ class Color(object):
 	def __str__(self):
 		return f"({self.__red}, {self.__green}, {self.__blue})"
 
-	def distance(self, other: Color):
+	def distance(self, other: Self):
 		return math.sqrt(
 			(self.__red - other.__red) ** 2
 			+ (self.__green - other.__green) ** 2
@@ -57,7 +59,7 @@ class ColorMap(object):
 			Shade.SHADED: shaded
 		}
 
-	def map_pixel(self, color: Color, answer: str | None, tolerance=0.05):
+	def map_pixel(self, color: Color, answer: str | None, tolerance: float = 0.05):
 		distances = [
 			(shade, def_color.distance(color))
 			for (shade, def_color) in self.__colors.items()
@@ -85,14 +87,23 @@ def read_image(
 		return crossword.Grid([
 			[
 				colors.map_pixel(
-					Color.from_pixel(image.getpixel((
-						(start_x + square_width * col),
-						(start_y + square_height * row)
-					))),
+					Color.from_pixel(
+						get_pixel(
+							image,
+							int(start_x + square_width * col),
+							int(start_y + square_height * row)
+						)
+					),
 					answer[row][col] if answer[row][col] != " " else None
 				) for col in range(cols)
 			] for row in range(rows)
 		])
+
+def get_pixel(image: Image.Image, x: int, y: int) -> Pixel:
+	pixel = image.getpixel((x, y))
+	assert isinstance(pixel, tuple)
+	assert len(pixel) == 4
+	return pixel
 
 def draw_grid(
 	grid: crossword.Grid,

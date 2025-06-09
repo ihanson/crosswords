@@ -10,6 +10,7 @@ import urllib.parse
 import os
 import sys
 import jpz
+import nyt_json
 
 WHITE_SQUARE = 1
 CIRCLED_SQUARE = 2
@@ -23,8 +24,8 @@ def puzzles_for_dates(
 	format_type: str | None = None,
 	publish_type: str | None = None,
 	nyt_s: str | None = None
-) -> list:
-	return requests.get(
+) -> list[nyt_json.PuzzleResult]:
+	puzzles: nyt_json.PuzzleList = requests.get(
 		"https://edge.games.nyti.nyt.net/svc/crosswords/v3/puzzles.json",
 		params={
 			"format_type": format_type,
@@ -34,42 +35,43 @@ def puzzles_for_dates(
 		}, headers={
 			"nyt-s": nyt_s
 		} if nyt_s is not None else None
-	).json()["results"] or []
+	).json()
+	return puzzles["results"] or []
 
-def dict_to_square(obj: dict) -> crossword.Square:
-	if "type" in obj:
-		cell_type = obj["type"]
+def cell_to_square(cell: nyt_json.Cell | nyt_json.BlackCell) -> crossword.Square:
+	if "type" in cell:
+		cell_type = cell["type"]
 		return crossword.WhiteSquare(
-			answer=obj.get("answer"),
+			answer=cell.get("answer"),
 			is_shaded=cell_type == SHADED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE,
 			is_circled=cell_type == CIRCLED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE
 		)
 	else:
 		return crossword.BlackSquare()
 
-def dict_to_clue(obj: dict) -> crossword.Clue:
+def dict_to_clue(clue: nyt_json.Clue) -> crossword.Clue:
 	return crossword.Clue(
-		obj["text"][0]["plain"],
-		obj["text"][0].get("formatted")
+		clue["text"][0]["plain"],
+		clue["text"][0].get("formatted")
 	)
 
-def format_date(date: datetime.date, weekday=True):
+def format_date(date: datetime.date, weekday: bool = True):
 	return f"{date.strftime('%A, %B' if weekday else '%B')} {date.day}, {date.year}"
 
 def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword.Puzzle:
-	obj = requests.get(
+	puzzle: nyt_json.Puzzle = requests.get(
 		f"https://www.nytimes.com/svc/crosswords/v6/puzzle/{publish_type}/{date.isoformat()}.json",
 		cookies={
 			"NYT-S": nyt_s
 		}
 	).json()
-	puzzle_dict = obj["body"][0]
+	puzzle_dict = puzzle["body"][0]
 	width = puzzle_dict["dimensions"]["width"]
 	height = puzzle_dict["dimensions"]["height"]
 	
 	return crossword.Puzzle(
 		grid=crossword.Grid([
-			[dict_to_square(puzzle_dict["cells"][row * width + col]) for col in range(width)]
+			[cell_to_square(puzzle_dict["cells"][row * width + col]) for col in range(width)]
 			for row in range(height)
 		]),
 		across={
@@ -80,10 +82,10 @@ def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> cross
 			int(puzzle_dict["clues"][i]["label"]): dict_to_clue(puzzle_dict["clues"][i])
 			for i in puzzle_dict["clueLists"][1]["clues"]
 		},
-		title=obj.get("title"),
-		author=", ".join(obj["constructors"]) if "constructors" in obj else None,
-		copyright=format_date(datetime.date.fromisoformat(obj["publicationDate"])),
-		note=obj["notes"][0]["text"] if "notes" in obj else None
+		title=puzzle.get("title"),
+		author=", ".join(puzzle["constructors"]) if "constructors" in puzzle else None,
+		copyright=format_date(datetime.date.fromisoformat(puzzle["publicationDate"])),
+		note=puzzle["notes"][0]["text"] if "notes" in puzzle else None
 	)
 
 def download_acrostic(date: datetime.date, nyt_s: str) -> acrostic.Acrostic:
@@ -93,7 +95,9 @@ def download_acrostic(date: datetime.date, nyt_s: str) -> acrostic.Acrostic:
 			"NYT-S": nyt_s
 		}
 	).text
-	b64_data = json.loads(re.search(r"window\.gameData\s+=\s+(\".*?\")", html_data)[1])
+	match = re.search(r"window\.gameData\s+=\s+(\".*?\")", html_data)
+	assert match is not None
+	b64_data = json.loads(match[1])
 	return json_to_acrostic(urllib.parse.unquote(base64.b64decode(b64_data).decode("ascii")))
 
 def acrostic_to_json(puzzle: acrostic.Acrostic, date: datetime.date) -> str:

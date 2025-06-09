@@ -6,7 +6,7 @@ def load_text(file_path: str) -> crossword.Puzzle:
 		author = reader.readline().strip("\r\n") or None
 		copyright = reader.readline().strip("\r\n") or None
 		note = reader.readline().strip("\r\n") or None
-		grid_text = []
+		grid_text: list[str] = []
 		while len(line := reader.readline().strip("\r\n")) > 0:
 			grid_text.append(line)
 		grid = crossword.Grid([
@@ -16,16 +16,23 @@ def load_text(file_path: str) -> crossword.Puzzle:
 			] for row in grid_text
 		])
 		(across_nums, down_nums) = clue_nums(grid)
-		across: dict[int, str] = {}
-		down: dict[int, str] = {}
+		across: dict[int, crossword.Clue] = {}
+		down: dict[int, crossword.Clue] = {}
 		for clue in across_nums:
-			across[clue] = crossword.Clue(*p(reader.readline().strip("\r\n")))
+			across[clue] = parse_clue(reader.readline())
 		for clue in down_nums:
-			down[clue] = crossword.Clue(*p(reader.readline().strip("\r\n")))
+			down[clue] = parse_clue(reader.readline())
 		return crossword.Puzzle(grid, across, down, title, author, copyright, note)
 
-def p(text):
-	return tuple(text.split("|"))
+def parse_clue(clue_line: str):
+	pieces = clue_line.strip("\r\n").split("|")
+	if len(pieces) == 1:
+		[text] = pieces
+		return crossword.Clue(text)
+	elif len(pieces) == 2:
+		[text, html] = pieces
+		return crossword.Clue(text, html)
+	raise ValueError("Clue line is not in the form text|html")
 
 def save_text(puzzle: crossword.Puzzle, file_path: str):
 	with open(file_path, "w", encoding="utf-8") as writer:
@@ -50,8 +57,8 @@ def save_text(puzzle: crossword.Puzzle, file_path: str):
 			writer.write("\n")
 
 def clue_nums(grid: crossword.Grid) -> tuple[list[int], list[int]]:
-	across = []
-	down = []
+	across: list[int] = []
+	down: list[int] = []
 	clue_num = 1
 	for row in range(grid.rows):
 		for col in range(grid.cols):
