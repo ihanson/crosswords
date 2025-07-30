@@ -11,7 +11,9 @@ def load_text(file_path: str) -> crossword.Puzzle:
 			grid_text.append(line)
 		grid = crossword.Grid([
 			[
-				crossword.BlackSquare() if c == " " else crossword.WhiteSquare(c)
+				crossword.BlackSquare() if c == " "
+					else crossword.WhiteSquare() if c == "."
+					else crossword.WhiteSquare(c)
 				for c in row
 			] for row in grid_text
 		])
