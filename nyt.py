@@ -58,13 +58,16 @@ def dict_to_clue(clue: nyt_json.Clue) -> crossword.Clue:
 def format_date(date: datetime.date, weekday: bool = True):
 	return f"{date.strftime('%A, %B' if weekday else '%B')} {date.day}, {date.year}"
 
-def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword.Puzzle:
-	puzzle: nyt_json.Puzzle = requests.get(
+def download_json(date: datetime.date, publish_type: str, nyt_s: str) -> nyt_json.Puzzle:
+	return requests.get(
 		f"https://www.nytimes.com/svc/crosswords/v6/puzzle/{publish_type}/{date.isoformat()}.json",
 		cookies={
 			"NYT-S": nyt_s
 		}
 	).json()
+
+def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword.Puzzle:
+	puzzle = download_json(date, publish_type, nyt_s)
 	puzzle_dict = puzzle["body"][0]
 	width = puzzle_dict["dimensions"]["width"]
 	height = puzzle_dict["dimensions"]["height"]

@@ -17,8 +17,12 @@ class PuzzleList(TypedDict):
 	status: str
 	results: list[PuzzleResult]
 
+class MoreAnswers(TypedDict):
+	valid: list[str]
+
 class Cell(TypedDict):
 	answer: str
+	moreAnswers: NotRequired[MoreAnswers]
 	clues: list[int]
 	label: str
 	type: int
