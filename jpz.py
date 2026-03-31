@@ -79,6 +79,9 @@ def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade: image.Co
 					cell.attrib["background-shape"] = "circle"
 				if square.is_shaded:
 					cell.attrib["background-color"] = shade.hex()
+				for side in crossword.SquareSide:
+					if square.has_bar(side):
+						cell.attrib[bar_attribute(side)] = "true"
 			else:
 				cell.attrib["type"] = "block"
 			is_across = puzzle.grid.is_across_start(row, col)
@@ -91,13 +94,11 @@ def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade: image.Co
 					word = ET.SubElement(crossword_el, "word", {
 						"id": str(word_count)
 					})
-					acr_col = col
-					while puzzle.grid.can_enter(row, acr_col):
+					for acr_col in puzzle.grid.across_word_cols(row, col):
 						ET.SubElement(word, "cells", {
 							"x": str(acr_col + 1),
 							"y": str(row + 1)
 						})
-						acr_col += 1
 					across_clues.append(clue_element(puzzle.across_clues[clue_count], word_count, clue_count))
 				if is_down:
 					word_count += 1
@@ -105,16 +106,26 @@ def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade: image.Co
 						"id": str(word_count)
 					})
 					down_row = row
-					while puzzle.grid.can_enter(down_row, col):
+					for down_row in puzzle.grid.down_word_rows(row, col):
 						ET.SubElement(word, "cells", {
 							"x": str(col + 1),
 							"y": str(down_row + 1)
 						})
-						down_row += 1
 					down_clues.append(clue_element(puzzle.down_clues[clue_count], word_count, clue_count))
 	crossword_el.append(across_clues)
 	crossword_el.append(down_clues)
 	ET.ElementTree(root).write(file_path, xml_declaration=True, encoding="utf-8")
+
+def bar_attribute(side: crossword.SquareSide) -> str:
+	match side:
+		case crossword.SquareSide.TOP:
+			return "top-bar"
+		case crossword.SquareSide.RIGHT:
+			return "right-bar"
+		case crossword.SquareSide.BOTTOM:
+			return "bottom-bar"
+		case crossword.SquareSide.LEFT:
+			return "left-bar"
 
 def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 	root = ET.Element("crossword-compiler-applet", {

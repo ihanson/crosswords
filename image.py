@@ -108,7 +108,7 @@ def get_pixel(image: Image.Image, x: int, y: int) -> Pixel:
 def draw_grid(
 	grid: crossword.Grid,
 	file_path: str,
-	size: int = 30,
+	size: int = 60,
 	colors: ColorMap = ColorMap(
 		Color(0x00, 0x00, 0x00),
 		Color(0xff, 0xff, 0xff),
@@ -120,16 +120,17 @@ def draw_grid(
 	image = Image.new("RGBA", (size * grid.cols + 1, size * grid.rows + 1))
 	draw = ImageDraw.Draw(image)
 	font = ImageFont.truetype(FONT_NAME, int(size * SIZE_FACTOR))
+	bars: list[tuple[tuple[float, float], tuple[float,float]]] = []
 	for row in range(grid.rows):
 		for col in range(grid.cols):
 			square = grid[row, col]
-			xy = [
+			xy = (
 				(col * size, row * size),
 				((col + 1) * size, (row + 1) * size)
-			]
+			)
 			draw.rectangle(
 				xy=xy,
-				outline=colors[Shade.BLACK].to_pixel(),
+				outline=colors[Shade.SHADED].to_pixel(),
 				fill=colors[square_to_shade(square)].to_pixel()
 			)
 			if isinstance(square, crossword.WhiteSquare) and square.is_circled:
@@ -137,21 +138,47 @@ def draw_grid(
 					xy=xy,
 					outline=colors[Shade.BLACK].to_pixel()
 				)
-			if isinstance(square, crossword.WhiteSquare) and square.answer is not None:
-				width = font.getlength(square.answer)
-				draw.text(
-					xy=(
-						col * size + (size / 2),
-						row * size + (size / 2)
-					),
-					text=square.answer,
-					fill = colors[Shade.BLACK].to_pixel(),
-					font = (
-						font if width <= size * SIZE_FACTOR
-						else ImageFont.truetype(
-							FONT_NAME, int((size * SIZE_FACTOR) ** 2 / width)
-						)
-					),
-					anchor = "mm"
-				)
+			if isinstance(square, crossword.WhiteSquare):
+				if square.answer is not None:
+					width = font.getlength(square.answer)
+					draw.text(
+						xy=(
+							col * size + (size / 2),
+							row * size + (size / 2)
+						),
+						text=square.answer,
+						fill = colors[Shade.BLACK].to_pixel(),
+						font = (
+							font if width <= size * SIZE_FACTOR
+							else ImageFont.truetype(
+								FONT_NAME, int((size * SIZE_FACTOR) ** 2 / width)
+							)
+						),
+						anchor = "mm"
+					)
+				for side in crossword.SquareSide:
+					if square.has_bar(side):
+						bars.append(border_line(xy, side))
+
+	for xy in bars:
+		draw.line(
+			xy,
+			fill=colors[Shade.BLACK].to_pixel(),
+			width=4
+		)
 	image.save(file_path, "PNG")
+
+def border_line(
+	corners_xy: tuple[tuple[float, float], tuple[float,float]],
+	side: crossword.SquareSide
+) -> tuple[tuple[float, float], tuple[float, float]]:
+	((x1, y1), (x2, y2)) = corners_xy
+	match side:
+		case crossword.SquareSide.TOP:
+			return ((x1, y1), (x2, y1))
+		case crossword.SquareSide.RIGHT:
+			return ((x2, y1), (x2, y2))
+		case crossword.SquareSide.BOTTOM:
+			return ((x1, y2), (x2, y2))
+		case crossword.SquareSide.LEFT:
+			return ((x1, y1), (x1, y2))

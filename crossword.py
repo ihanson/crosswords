@@ -1,14 +1,30 @@
+from enum import Enum
+from typing import Generator
+
 class Square(object):
 	pass
 
 class BlackSquare(Square):
 	pass
 
+class SquareSide(Enum):
+	TOP = 0
+	RIGHT = 1
+	BOTTOM = 2
+	LEFT = 3
+
 class WhiteSquare(Square):
-	def __init__(self, answer: str | None = None, is_shaded: bool = False, is_circled: bool = False):
+	def __init__(
+			self,
+			answer: str | None = None,
+			is_shaded: bool = False,
+			is_circled: bool = False,
+			bars: frozenset[SquareSide] = frozenset()
+		):
 		self.__answer = answer
 		self.__is_shaded = is_shaded
 		self.__is_circled = is_circled
+		self.__bars = frozenset(bars)
 
 	@property
 	def answer(self):
@@ -21,6 +37,9 @@ class WhiteSquare(Square):
 	@property
 	def is_circled(self):
 		return self.__is_circled
+	
+	def has_bar(self, bar: SquareSide):
+		return bar in self.__bars
 
 class Clue(object):
 	def __init__(self, clue: str, clue_html: str | None = None):
@@ -45,7 +64,12 @@ class Grid(object):
 
 	def __getitem__(self, index: tuple[int, int]):
 		(row, col) = index
-		return self.__squares[row][col]
+		if (
+			0 <= row < self.rows
+			and 0 <= col < self.cols
+		):
+			return self.__squares[row][col]
+		return BlackSquare()
 	
 	@property
 	def rows(self):
@@ -54,27 +78,53 @@ class Grid(object):
 	@property
 	def cols(self):
 		return len(self.__squares[0])
-
-	def can_enter(self, row: int, col: int):
+	
+	def word_continues_right(self, row: int, col: int) -> bool:
+		square1 = self[row, col]
+		square2 = self[row, col + 1]
 		return (
-			0 <= row < self.rows
-			and 0 <= col < self.cols
-			and isinstance(self[row, col], WhiteSquare)
+			isinstance(square1, WhiteSquare)
+			and isinstance(square2, WhiteSquare)
+			and not square1.has_bar(SquareSide.RIGHT)
+			and not square2.has_bar(SquareSide.LEFT)
+		)
+	
+	def word_continues_down(self, row: int, col: int) -> bool:
+		square1 = self[row, col]
+		square2 = self[row + 1, col]
+		return (
+			isinstance(square1, WhiteSquare)
+			and isinstance(square2, WhiteSquare)
+			and not square1.has_bar(SquareSide.BOTTOM)
+			and not square2.has_bar(SquareSide.TOP)
 		)
 
 	def is_across_start(self, row: int, col: int):
 		return (
-			self.can_enter(row, col)
-			and not self.can_enter(row, col - 1)
-			and self.can_enter(row, col + 1)
+			not self.word_continues_right(row, col - 1)
+			and self.word_continues_right(row, col)
 		)
 
 	def is_down_start(self, row: int, col: int):
 		return (
-			self.can_enter(row, col)
-			and not self.can_enter(row - 1, col)
-			and self.can_enter(row + 1, col)
+			not self.word_continues_down(row - 1, col)
+			and self.word_continues_down(row, col)
 		)
+	
+	def across_word_cols(self, row: int, col: int) -> Generator[int]:
+		if self.is_across_start(row, col):
+			yield col
+		while self.word_continues_right(row, col):
+			col += 1
+			yield col
+	
+	def down_word_rows(self, row: int, col: int) -> Generator[int]:
+		if self.is_down_start(row, col):
+			yield row
+		while self.word_continues_down(row, col):
+			row += 1
+			yield row
+		
 
 class Puzzle(object):
 	def __init__(

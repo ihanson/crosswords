@@ -4,9 +4,8 @@ from bs4 import BeautifulSoup
 import re
 import json
 import os.path
-from typing import Iterator, TypeVar
+from typing import Any, Iterable, Iterator, TypeVar
 import crossword
-from nyt import format_date
 import jpz
 
 js_expr = re.compile(r"window.__PRELOADED_STATE__ = (?P<json>.*);")
@@ -14,12 +13,16 @@ section_expr = re.compile(r"## (?P<header>[^\n]+)\n\n(?P<value>(?:[^\n]|\n(?!\n#
 metadata_expr = re.compile(r"(?P<key>[^:]+): (?P<value>.*)")
 clue_expr = re.compile(r"(?P<direction>[AD])(?P<number>\d+)\. (?P<clue>.*) ~ [A-Z]*")
 bracket_expr = re.compile(r"\{(?P<symbol>.)(?P<contents>.*)(?P=symbol)\}")
-						
-def download_puzzle(date: datetime.date) -> crossword.Puzzle:
+cssish_expr = re.compile(r"(?P<tag>\w) \{(?P<properties>[^}]*)\}")
+
+def puzzle_url(date: datetime.date, puzzle_type: str = "crossword"):
+	return f"https://www.newyorker.com/puzzles-and-games-dept/{puzzle_type}/{date.year:04}/{date.month:02}/{date.day:02}"
+
+def download_puzzle(
+	url: str,
+) -> crossword.Puzzle:
 	page = BeautifulSoup(
-		requests.get(
-			f"https://www.newyorker.com/puzzles-and-games-dept/crossword/{date.year:04}/{date.month:02}/{date.day:02}"
-		).text,
+		requests.get(url).text,
 		features="html.parser"
 	)
 	script_tags = page.find_all("script")
@@ -28,8 +31,9 @@ def download_puzzle(date: datetime.date) -> crossword.Puzzle:
 		jsons = [assert_not_none(match.group("json")) for match in results if match]
 		[state_json] = jsons
 		state = json.loads(state_json)
-		[_, [_, embed]] = state["transformed"]["article"]["body"]
-		puzzle_id = embed["props"]["id"]
+		puzzle_id = assert_not_none(
+			find_game_id(state["transformed"]["article"]["body"])
+		)
 	except IndexError, ValueError, KeyError, TypeError:
 		raise ValueError("Could not find the New Yorker puzzle")
 	puzzle_data: str = requests.get(
@@ -62,14 +66,20 @@ def download_puzzle(date: datetime.date) -> crossword.Puzzle:
 			)
 			if match is not None
 		]
+		is_barred = metadata.get("form") == "barred"
+		design = GridDesign(
+			sections["Design"] if is_barred
+			else None
+		)
 	except KeyError, ValueError:
 		raise ValueError("Could not parse the New Yorker puzzle")
+	
 	grid = crossword.Grid([
 		[
 			crossword.BlackSquare() if char == "."
-			else crossword.WhiteSquare(char)
-			for char in row
-		] for row in sections["Grid"].split("\n")
+			else crossword.WhiteSquare(char, bars=design.bars(y, x))
+			for (x, char) in enumerate(row)
+		] for (y, row) in enumerate(sections["Grid"].split("\n"))
 	])
 	clues_by_dir = {
 		direction: {
@@ -86,8 +96,36 @@ def download_puzzle(date: datetime.date) -> crossword.Puzzle:
 		down=clues_by_dir["D"],
 		title=metadata["title"],
 		author=metadata["author"],
-		copyright=metadata.get("copyright") or metadata.get("date") or format_date(date)
+		copyright=metadata.get("copyright") or metadata.get("date")
 	)
+
+def find_game_id(root: list[Any]) -> str | None:
+	match root:
+		case ["inline-embed", {
+			"type": "game",
+			"props": {
+				"id": game_id
+			}
+		}]:
+			return game_id
+		case [_, {}, *rest]:
+			return first_not_none(
+				find_game_id(tag)
+				for tag in rest
+			)
+		case [_, *rest]:
+			return first_not_none(
+				find_game_id(tag)
+				for tag in rest
+			)
+		case _:
+			raise ValueError("Unexpected pattern")
+
+def first_not_none(iterable: Iterable[T | None]) -> T | None:
+	for value in iterable:
+		if value is not None:
+			return value
+	return None
 
 def parse_clue(clue: str) -> BeautifulSoup:
 	result = BeautifulSoup()
@@ -105,9 +143,14 @@ def parse_brackets(bracketed: str) -> BeautifulSoup:
 	symbol: str = match.group("symbol")
 	contents: str = match.group("contents")
 	soup = BeautifulSoup()
-	tag = {
-		"/": "i"
-	}[symbol]
+	try:
+		tag = {
+			"/": "i",
+			"_": "u",
+			"*": "b"
+		}[symbol]
+	except KeyError:
+		raise ValueError(f"Unknown symbol {symbol}")
 	node = soup.new_tag(tag)
 	node.append(parse_clue(contents))
 	soup.append(node)
@@ -126,6 +169,84 @@ def advance_to_close(char_iter: Iterator[str]) -> str:
 				return "".join(result)
 	raise ValueError("Unclosed bracket")
 
+class GridDesign(object):
+	def __init__(self, design: str | None):
+		self.__grid__ = (
+			GridDesign.__parse_design__(design)
+			if design is not None
+			else None
+		)
+	
+	def bars(self, row: int, col: int) -> frozenset[crossword.SquareSide]:
+		return (
+			self.__grid__[row][col]
+			if self.__grid__ is not None
+			else frozenset()
+		)
+
+	@staticmethod
+	def __parse_design__(design: str):
+		[style_html, grid] = design.strip().split("\n\n")
+		style_soup = BeautifulSoup(style_html, features="html.parser")
+		style = GridDesign.__parse_cssish__(
+			assert_not_none(style_soup.find("style")).text
+		)
+		bar_map = {
+			tag: frozenset([
+				GridDesign.__direction__(prop)
+				for (prop, value) in rules.items()
+				if value == "true"
+			])
+			for (tag, rules) in style
+		}
+		empty: frozenset[crossword.SquareSide] = frozenset()
+		return [
+			[
+				bar_map.get(cell, empty)
+				for cell in row
+			]
+			for row in grid.strip().split("\n")
+		]
+	
+	@staticmethod
+	def __parse_cssish__(cssish: str) -> list[tuple[str, dict[str, str]]]:
+		lines = (
+			assert_not_none(cssish_expr.fullmatch(line))
+			for line in cssish.strip().split("\n")
+		)
+		return [
+			(
+				line.group("tag"),
+				{
+					prop.strip(): value.strip()
+					for [prop, value] in (
+						rule.split(":")
+						for rule in line.group("properties").split(";")
+					)
+				}
+			)
+			for line in lines
+		]
+	
+	@staticmethod
+	def __direction__(property: str) -> crossword.SquareSide:
+		match property:
+			case "bar-top":
+				return crossword.SquareSide.TOP
+			case "bar-right":
+				return crossword.SquareSide.RIGHT
+			case "bar-bottom":
+				return crossword.SquareSide.BOTTOM
+			case "bar-left":
+				return crossword.SquareSide.LEFT
+			case _:
+				raise ValueError(f"Unknown property {property}")
+
+def daily_puzzle(date: datetime.date | None = None):
+	date = date or datetime.date.today()
+	puzzle_type = "mini-crossword" if date.weekday() >= 3 else "crossword"
+	return download_puzzle(f"https://www.newyorker.com/puzzles-and-games-dept/{puzzle_type}/{date.year:04}/{date.month:02}/{date.day:02}")
+
 T = TypeVar("T")
 def assert_not_none(value: T | None) -> T:
 	if value is None:
@@ -133,6 +254,6 @@ def assert_not_none(value: T | None) -> T:
 	return value
 
 if __name__ == "__main__":
-	date = datetime.date(2026, 3, 23)
-	puzzle = download_puzzle(date)
+	date = datetime.date.today()
+	puzzle = daily_puzzle(date)
 	jpz.save_crossword_jpz(puzzle, os.path.join("puzzles", f"tny {date.isoformat()}.jpz"))
