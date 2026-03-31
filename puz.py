@@ -267,12 +267,13 @@ def load_puz(file_path: str) -> crossword.Puzzle:
 		title.optional(), author.optional(), copyright.optional(), notes.optional()
 	)
 
-def save_puz(puzzle: crossword.Puzzle, file_path: str):
+def save_puz(puzzle: crossword.Puzzle, file_path: str, diagramless=False):
 	num_clues = len(puzzle.across_clues) + len(puzzle.down_clues)
 	cib = struct.pack(
 		"<BBH2sH",
 		puzzle.grid.cols, puzzle.grid.rows, num_clues,
-		b"\x01\x00", 0
+		b"\x01\x04" if diagramless else b"\x01\x00",
+		0
 	)
 	solution = encode_grid(
 		puzzle.grid,
@@ -332,3 +333,10 @@ def save_puz(puzzle: crossword.Puzzle, file_path: str):
 			writer.write(clue.bytes)
 		writer.write(notes.bytes)
 		writer.write(extra_sections)
+
+if __name__ == "__main__":
+	import nyt
+	import datetime
+	import jpz
+	p = nyt.download_puzzle(datetime.date(2026, 3, 29), "daily", nyt.token())
+	jpz.save_crossword_jpz(p, r"C:\Users\Ira\Downloads\crosswords\nyt 2026-03-29.jpz")
