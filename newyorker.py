@@ -36,12 +36,15 @@ def download_puzzle(
 		)
 	except IndexError, ValueError, KeyError, TypeError:
 		raise ValueError("Could not find the New Yorker puzzle")
-	puzzle_data: str = requests.get(
+	puzzle = requests.get(
 		f"https://puzzles-games-api.gp-prod.conde.digital/api/v1/games/{puzzle_id}",
 		headers={
 			"User-Agent": "Mozilla/5.0"
 		}
-	).json()["data"]
+	).json()
+	if puzzle["gameType"] != "crossword":
+		raise ValueError("Not a crossword puzzle")
+	puzzle_data: str = puzzle["data"]
 	sections: dict[str, str] = {
 		match.group("header"): match.group("value")
 		for match in section_expr.finditer(puzzle_data)
