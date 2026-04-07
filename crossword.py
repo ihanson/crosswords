@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Generator
+from bs4 import BeautifulSoup
 
 class Square(object):
 	pass
@@ -40,19 +41,6 @@ class WhiteSquare(Square):
 	
 	def has_bar(self, bar: SquareSide):
 		return bar in self.__bars
-
-class Clue(object):
-	def __init__(self, clue: str, clue_html: str | None = None):
-		self.__clue = clue
-		self.__clue_html = clue_html
-
-	@property
-	def clue(self):
-		return self.__clue
-
-	@property
-	def clue_html(self):
-		return self.__clue_html
 
 class Grid(object):
 	def __init__(self, squares: list[list[Square]]):
@@ -128,9 +116,10 @@ class Grid(object):
 
 class Puzzle(object):
 	def __init__(
-		self, grid: Grid, across: dict[int, Clue], down: dict[int, Clue],
-		title: str | None = None, author: str | None = None,
-		copyright: str | None = None, note: str | None = None
+		self, grid: Grid,
+		across: dict[int, FormattableText], down: dict[int, FormattableText],
+		title: str | None = None, author: str | None = None, copyright: str | None = None,
+		note: FormattableText | None = None, instructions: FormattableText | None = None
 	):
 		self.__grid = grid
 		self.__across = across
@@ -139,6 +128,7 @@ class Puzzle(object):
 		self.__author = author
 		self.__copyright = copyright
 		self.__note = note
+		self.__instructions = instructions
 
 	@property
 	def grid(self):
@@ -161,9 +151,40 @@ class Puzzle(object):
 		return self.__note
 	
 	@property
+	def instructions(self):
+		return self.__instructions
+	
+	@property
 	def across_clues(self):
 		return self.__across
 	
 	@property
 	def down_clues(self):
 		return self.__down
+
+class FormattableText(object):
+	def __init__(self, text: str | None = None, html: BeautifulSoup | str | None = None):
+		html = BeautifulSoup(html, "html.parser") if isinstance(html, str) else html
+		if text is not None and html is None:
+			self.__text = text
+			self.__html = BeautifulSoup()
+			for (i, line) in enumerate(text.split("\n")):
+				if i > 0:
+					self.__html.append(self.__html.new_tag("br"))
+				self.__html.append(line)
+		elif text is None and html is not None:
+			self.__html = html
+			self.__text = self.__html.getText()
+		elif text is not None and html is not None:
+			self.__html = html
+			self.__text = text
+		else:
+			raise ValueError("Expected one non-None value")
+
+	@property
+	def html(self) -> BeautifulSoup:
+		return self.__html
+
+	@property
+	def text(self) -> str:
+		return self.__text

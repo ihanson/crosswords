@@ -1,6 +1,4 @@
 import xml.etree.ElementTree as ET
-from bs4 import BeautifulSoup
-import html
 import crossword
 import acrostic
 import image
@@ -10,18 +8,12 @@ NUM_COLS = 3
 GRID_WORD_ID = "1000"
 ATTRIB_WORD_ID = "1001"
 
-def element_with_raw_html(tag: str, raw_html: str | None, alternative_text: str):
-	if raw_html is not None:
-		return ET.fromstring(BeautifulSoup(
-			f"<{tag}>{raw_html}</{tag}>",
-			"html.parser"
-		).decode_contents())
-	element = ET.Element(tag)
-	element.text = alternative_text
-	return element
+def element_with_raw_html(tag: str, text: crossword.FormattableText):
+	xml_ish = f"<{tag}>{text.html}</{tag}>"
+	return ET.fromstring(xml_ish)
 
-def clue_element(clue: crossword.Clue, word_id: int, clue_number: int):
-	element = element_with_raw_html("clue", clue.clue_html, clue.clue)
+def clue_element(clue: crossword.FormattableText, word_id: int, clue_number: int):
+	element = element_with_raw_html("clue", clue)
 	element.attrib = {
 		"word": str(word_id),
 		"number": str(clue_number)
@@ -44,8 +36,9 @@ def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade: image.Co
 	if puzzle.copyright is not None:
 		ET.SubElement(metadata, "copyright").text = puzzle.copyright
 	if puzzle.note is not None:
-		note_html = html.escape(puzzle.note).replace("\n", "<br>")
-		metadata.append(element_with_raw_html("description", note_html, puzzle.note))
+		metadata.append(element_with_raw_html("description", puzzle.note))
+	if puzzle.instructions is not None:
+		metadata.append(element_with_raw_html("instructions", puzzle.instructions))
 	
 	crossword_el = ET.SubElement(puzzle_el, "crossword")
 	grid = ET.SubElement(crossword_el, "grid", {

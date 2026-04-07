@@ -56,12 +56,13 @@ def download_puzzle(
 				assert_not_none(metadata_expr.fullmatch(line))
 				for line in sections["Metadata"].split("\n")
 			)
+			if data.group("value")
 		}
-		clues: list[tuple[str, int, BeautifulSoup]] = [
+		clues: list[tuple[str, int, crossword.FormattableText]] = [
 			(
 				match.group("direction"),
 				int(match.group("number")),
-				parse_clue(match.group("clue"))
+				crossword.FormattableText(html=parse_clue(match.group("clue")))
 			)
 			for match in (
 				clue_expr.fullmatch(line)
@@ -86,20 +87,22 @@ def download_puzzle(
 	])
 	clues_by_dir = {
 		direction: {
-			number: crossword.Clue(clue.text, str(clue))
+			number: clue
 			for (clue_dir, number, clue)
 			in clues
 			if clue_dir == direction
 		}
 		for direction in ["A", "D"]
 	}
+	instructions = sections.get("Help")
 	return crossword.Puzzle(
 		grid=grid,
 		across=clues_by_dir["A"],
 		down=clues_by_dir["D"],
 		title=metadata["title"],
 		author=metadata["author"],
-		copyright=metadata.get("copyright") or metadata.get("date")
+		copyright=metadata.get("copyright") or metadata.get("date"),
+		instructions=crossword.FormattableText(html=instructions) if instructions else None
 	)
 
 def find_game_id(root: list[Any]) -> str | None:

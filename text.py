@@ -18,22 +18,25 @@ def load_text(file_path: str) -> crossword.Puzzle:
 			] for row in grid_text
 		])
 		(across_nums, down_nums) = clue_nums(grid)
-		across: dict[int, crossword.Clue] = {}
-		down: dict[int, crossword.Clue] = {}
+		across: dict[int, crossword.FormattableText] = {}
+		down: dict[int, crossword.FormattableText] = {}
 		for clue in across_nums:
 			across[clue] = parse_clue(reader.readline())
 		for clue in down_nums:
 			down[clue] = parse_clue(reader.readline())
-		return crossword.Puzzle(grid, across, down, title, author, copyright, note)
+		return crossword.Puzzle(
+			grid, across, down, title, author, copyright,
+			crossword.FormattableText(text=note) if note else None
+		)
 
 def parse_clue(clue_line: str):
 	pieces = clue_line.strip("\r\n").split("|")
 	if len(pieces) == 1:
 		[text] = pieces
-		return crossword.Clue(text)
+		return crossword.FormattableText(text)
 	elif len(pieces) == 2:
 		[text, html] = pieces
-		return crossword.Clue(text, html)
+		return crossword.FormattableText(text, html)
 	raise ValueError("Clue line is not in the form text|html")
 
 def save_text(puzzle: crossword.Puzzle, file_path: str):
@@ -44,7 +47,7 @@ def save_text(puzzle: crossword.Puzzle, file_path: str):
 		writer.write("\n")
 		writer.write(puzzle.copyright or "")
 		writer.write("\n")
-		writer.write(puzzle.note or "")
+		writer.write(puzzle.note.text if puzzle.note else "")
 		writer.write("\n")
 		for row in range(puzzle.grid.rows):
 			for col in range(puzzle.grid.cols):
@@ -52,10 +55,10 @@ def save_text(puzzle: crossword.Puzzle, file_path: str):
 			writer.write("\n")
 		writer.write("\n")
 		for (_, clue) in sorted(puzzle.across_clues.items()):
-			writer.write(clue.clue)
+			writer.write(clue.text)
 			writer.write("\n")
 		for (_, clue) in sorted(puzzle.down_clues.items()):
-			writer.write(clue.clue)
+			writer.write(clue.text)
 			writer.write("\n")
 
 def clue_nums(grid: crossword.Grid) -> tuple[list[int], list[int]]:
