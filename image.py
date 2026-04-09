@@ -37,9 +37,13 @@ def draw_grid(
 	file_path: str,
 	size: int = 60
 ):
+	SCALE = 2
 	SIZE_FACTOR = 0.8
+	size *= SCALE
 	FONT_NAME = "arial.ttf"
-	image = Image.new("RGBA", (size * grid.cols + 1, size * grid.rows + 1))
+	width = size * grid.cols + 1
+	height = size * grid.rows + 1
+	image = Image.new("RGBA", (width, height))
 	draw = ImageDraw.Draw(image)
 	font = ImageFont.truetype(FONT_NAME, int(size * SIZE_FACTOR))
 	bars: list[tuple[tuple[float, float], tuple[float,float]]] = []
@@ -51,16 +55,18 @@ def draw_grid(
 		draw.rectangle(
 			xy=xy,
 			outline=Color.Gray.to_pixel(),
-			fill=square_color(square).to_pixel()
+			fill=square_color(square).to_pixel(),
+			width=SCALE
 		)
 		if isinstance(square, crossword.WhiteSquare) and square.is_circled:
 			draw.ellipse(
 				xy=xy,
-				outline=Color.Black.to_pixel()
+				outline=Color.Black.to_pixel(),
+				width=SCALE
 			)
 		if isinstance(square, crossword.WhiteSquare):
 			if square.answer is not None:
-				width = font.getlength(square.answer)
+				text_width = font.getlength(square.answer)
 				draw.text(
 					xy=(
 						col * size + (size / 2),
@@ -69,9 +75,9 @@ def draw_grid(
 					text=square.answer,
 					fill = Color.Black.to_pixel(),
 					font = (
-						font if width <= size * SIZE_FACTOR
+						font if text_width <= size * SIZE_FACTOR
 						else ImageFont.truetype(
-							FONT_NAME, int((size * SIZE_FACTOR) ** 2 / width)
+							FONT_NAME, int((size * SIZE_FACTOR) ** 2 / text_width)
 						)
 					),
 					anchor = "mm"
@@ -84,9 +90,10 @@ def draw_grid(
 		draw.line(
 			xy,
 			fill=Color.Black.to_pixel(),
-			width=4
+			width=4 * SCALE
 		)
-	image.save(file_path, "PNG")
+	x = image.resize((width // SCALE, height // SCALE)) # type: ignore
+	x.save(file_path, "PNG")
 
 def border_line(
 	corners_xy: tuple[tuple[float, float], tuple[float,float]],
