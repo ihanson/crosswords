@@ -150,14 +150,15 @@ def parse_brackets(bracketed: str) -> BeautifulSoup:
 	contents: str = match.group("contents")
 	soup = BeautifulSoup()
 	try:
-		tag = {
-			"/": "i",
-			"_": "u",
-			"*": "b"
+		(prop, val) = {
+			"/": ("font-style", "italic"),
+			"_": ("text-decoration", "underline"),
+			"*": ("font-weight", "bold")
 		}[symbol]
 	except KeyError:
 		raise ValueError(f"Unknown symbol {symbol}")
-	node = soup.new_tag(tag)
+	node = soup.new_tag("span")
+	node["style"] = f"{prop}:{val}"
 	node.append(parse_clue(contents))
 	soup.append(node)
 	return soup
