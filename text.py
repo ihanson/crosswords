@@ -25,8 +25,13 @@ def load_text(file_path: str) -> crossword.Puzzle:
 		for clue in down_nums:
 			down[clue] = parse_clue(reader.readline())
 		return crossword.Puzzle(
-			grid, across, down, title, author, copyright,
-			crossword.FormattableText(text=note) if note else None
+			grid=grid,
+			across=across,
+			down=down,
+			title=crossword.FormattableText(title) if title else None,
+			author=crossword.FormattableText(author) if author else None,
+			copyright=crossword.FormattableText(copyright) if copyright else None,
+			note=crossword.FormattableText(note) if note else None
 		)
 
 def parse_clue(clue_line: str):
@@ -41,19 +46,19 @@ def parse_clue(clue_line: str):
 
 def save_text(puzzle: crossword.Puzzle, file_path: str):
 	with open(file_path, "w", encoding="utf-8") as writer:
-		writer.write(puzzle.title or "")
+		writer.write(puzzle.title.text if puzzle.title else "")
 		writer.write("\n")
-		writer.write(puzzle.author or "")
+		writer.write(puzzle.author.text if puzzle.author else "")
 		writer.write("\n")
-		writer.write(puzzle.copyright or "")
+		writer.write(puzzle.copyright.text if puzzle.copyright else "")
 		writer.write("\n")
 		writer.write(puzzle.note.text if puzzle.note else "")
 		writer.write("\n")
-		for row in range(puzzle.grid.rows):
-			for col in range(puzzle.grid.cols):
-				writer.write("." if isinstance(puzzle.grid[row, col], crossword.WhiteSquare) else " ")
-			writer.write("\n")
-		writer.write("\n")
+		writer.write("\n".join(
+			"." if isinstance(cell, crossword.WhiteSquare) else " "
+			for (_, cell) in puzzle.grid
+		))
+		writer.write("\n\n")
 		for (_, clue) in sorted(puzzle.across_clues.items()):
 			writer.write(clue.text)
 			writer.write("\n")
@@ -65,16 +70,15 @@ def clue_nums(grid: crossword.Grid) -> tuple[list[int], list[int]]:
 	across: list[int] = []
 	down: list[int] = []
 	clue_num = 1
-	for row in range(grid.rows):
-		for col in range(grid.cols):
-			is_across = grid.is_across_start(row, col)
-			is_down = grid.is_down_start(row, col)
-			if is_across or is_down:
-				if is_across:
-					across.append(clue_num)
-				if is_down:
-					down.append(clue_num)
-				clue_num += 1
+	for ((row, col), _) in grid:
+		is_across = grid.is_across_start(row, col)
+		is_down = grid.is_down_start(row, col)
+		if is_across or is_down:
+			if is_across:
+				across.append(clue_num)
+			if is_down:
+				down.append(clue_num)
+			clue_num += 1
 	return (across, down)
 
 if __name__ == "__main__":

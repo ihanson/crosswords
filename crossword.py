@@ -1,6 +1,7 @@
 from enum import Enum
-from typing import Generator
+from typing import Generator, Iterator
 from bs4 import BeautifulSoup
+import image
 
 class Square(object):
 	pass
@@ -18,12 +19,12 @@ class WhiteSquare(Square):
 	def __init__(
 			self,
 			answer: str | None = None,
-			is_shaded: bool = False,
+			color: image.Color | None = None,
 			is_circled: bool = False,
 			bars: frozenset[SquareSide] = frozenset()
 		):
 		self.__answer = answer
-		self.__is_shaded = is_shaded
+		self.__color = color
 		self.__is_circled = is_circled
 		self.__bars = frozenset(bars)
 
@@ -32,8 +33,8 @@ class WhiteSquare(Square):
 		return self.__answer
 
 	@property
-	def is_shaded(self):
-		return self.__is_shaded
+	def color(self):
+		return self.__color
 
 	@property
 	def is_circled(self):
@@ -67,6 +68,11 @@ class Grid(object):
 	def cols(self):
 		return len(self.__squares[0])
 	
+	def __iter__(self) -> Iterator[tuple[tuple[int, int], Square]]:
+		for row in range(self.rows):
+			for col in range(self.cols):
+				yield ((row, col), self[row, col])
+
 	def word_continues_right(self, row: int, col: int) -> bool:
 		square1 = self[row, col]
 		square2 = self[row, col + 1]
@@ -112,14 +118,18 @@ class Grid(object):
 		while self.word_continues_down(row, col):
 			row += 1
 			yield row
-		
 
 class Puzzle(object):
 	def __init__(
-		self, grid: Grid,
-		across: dict[int, FormattableText], down: dict[int, FormattableText],
-		title: str | None = None, author: str | None = None, copyright: str | None = None,
-		note: FormattableText | None = None, instructions: FormattableText | None = None
+		self,
+		grid: Grid,
+		across: dict[int, FormattableText],
+		down: dict[int, FormattableText],
+		title: FormattableText | None = None,
+		author: FormattableText | None = None,
+		copyright: FormattableText | None = None,
+		note: FormattableText | None = None,
+		show_note_on_open: bool = False
 	):
 		self.__grid = grid
 		self.__across = across
@@ -128,7 +138,7 @@ class Puzzle(object):
 		self.__author = author
 		self.__copyright = copyright
 		self.__note = note
-		self.__instructions = instructions
+		self.__show_note_on_open = show_note_on_open
 
 	@property
 	def grid(self):
@@ -151,8 +161,8 @@ class Puzzle(object):
 		return self.__note
 	
 	@property
-	def instructions(self):
-		return self.__instructions
+	def show_note_on_open(self):
+		return self.__show_note_on_open
 	
 	@property
 	def across_clues(self):

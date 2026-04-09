@@ -1,7 +1,6 @@
 import xml.etree.ElementTree as ET
 import crossword
 import acrostic
-import image
 import string
 
 NUM_COLS = 3
@@ -20,7 +19,7 @@ def clue_element(clue: crossword.FormattableText, word_id: int, clue_number: int
 	}
 	return element
 
-def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade: image.Color = image.Color(0xff, 0xff, 0x00)):
+def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str):
 	root = ET.Element("crossword-compiler-applet", {
 		"xmlns": "http://crossword.info/xml/crossword-compiler"
 	})
@@ -29,16 +28,18 @@ def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade: image.Co
 		"alphabet": "ABCDEFGHIJIKLMNOPQRSTUVWXYZ"
 	})
 	metadata = ET.SubElement(puzzle_el, "metadata")
-	if puzzle.title is not None:
-		ET.SubElement(metadata, "title").text = puzzle.title
-	if puzzle.author is not None:
-		ET.SubElement(metadata, "creator").text = puzzle.author
-	if puzzle.copyright is not None:
-		ET.SubElement(metadata, "copyright").text = puzzle.copyright
-	if puzzle.note is not None:
-		metadata.append(element_with_raw_html("description", puzzle.note))
-	if puzzle.instructions is not None:
-		metadata.append(element_with_raw_html("instructions", puzzle.instructions))
+	note_key = (
+		"description" if puzzle.show_note_on_open
+		else "instructions"
+	)
+	for (tag, text) in [
+		("title", puzzle.title),
+		("creator", puzzle.author),
+		("copyright", puzzle.copyright),
+		(note_key, puzzle.note)
+	]:
+		if text is not None:
+			metadata.append(element_with_raw_html(tag, text))
 	
 	crossword_el = ET.SubElement(puzzle_el, "crossword")
 	grid = ET.SubElement(crossword_el, "grid", {
@@ -58,53 +59,51 @@ def save_crossword_jpz(puzzle: crossword.Puzzle, file_path: str, shade: image.Co
 		"ordering": "normal"
 	})
 	ET.SubElement(down_clues, "title").text = "Down"
-	for row in range(puzzle.grid.rows):
-		for col in range(puzzle.grid.cols):
-			square = puzzle.grid[row, col]
-			cell = ET.SubElement(grid, "cell", {
-				"x": str(col + 1),
-				"y": str(row + 1)
-			})
-			if isinstance(square, crossword.WhiteSquare):
-				if square.answer is not None:
-					cell.attrib["solution"] = square.answer
-				if square.is_circled:
-					cell.attrib["background-shape"] = "circle"
-				if square.is_shaded:
-					cell.attrib["background-color"] = shade.hex()
-				for side in crossword.SquareSide:
-					if square.has_bar(side):
-						cell.attrib[bar_attribute(side)] = "true"
-			else:
-				cell.attrib["type"] = "block"
-			is_across = puzzle.grid.is_across_start(row, col)
-			is_down = puzzle.grid.is_down_start(row, col)
-			if is_across or is_down:
-				clue_count += 1
-				cell.attrib["number"] = str(clue_count)
-				if is_across:
-					word_count += 1
-					word = ET.SubElement(crossword_el, "word", {
-						"id": str(word_count)
+	for ((row, col), square) in puzzle.grid:
+		cell = ET.SubElement(grid, "cell", {
+			"x": str(col + 1),
+			"y": str(row + 1)
+		})
+		if isinstance(square, crossword.WhiteSquare):
+			if square.answer is not None:
+				cell.attrib["solution"] = square.answer
+			if square.is_circled:
+				cell.attrib["background-shape"] = "circle"
+			if square.color:
+				cell.attrib["background-color"] = square.color.hex()
+			for side in crossword.SquareSide:
+				if square.has_bar(side):
+					cell.attrib[bar_attribute(side)] = "true"
+		else:
+			cell.attrib["type"] = "block"
+		is_across = puzzle.grid.is_across_start(row, col)
+		is_down = puzzle.grid.is_down_start(row, col)
+		if is_across or is_down:
+			clue_count += 1
+			cell.attrib["number"] = str(clue_count)
+			if is_across:
+				word_count += 1
+				word = ET.SubElement(crossword_el, "word", {
+					"id": str(word_count)
+				})
+				for acr_col in puzzle.grid.across_word_cols(row, col):
+					ET.SubElement(word, "cells", {
+						"x": str(acr_col + 1),
+						"y": str(row + 1)
 					})
-					for acr_col in puzzle.grid.across_word_cols(row, col):
-						ET.SubElement(word, "cells", {
-							"x": str(acr_col + 1),
-							"y": str(row + 1)
-						})
-					across_clues.append(clue_element(puzzle.across_clues[clue_count], word_count, clue_count))
-				if is_down:
-					word_count += 1
-					word = ET.SubElement(crossword_el, "word", {
-						"id": str(word_count)
+				across_clues.append(clue_element(puzzle.across_clues[clue_count], word_count, clue_count))
+			if is_down:
+				word_count += 1
+				word = ET.SubElement(crossword_el, "word", {
+					"id": str(word_count)
+				})
+				down_row = row
+				for down_row in puzzle.grid.down_word_rows(row, col):
+					ET.SubElement(word, "cells", {
+						"x": str(col + 1),
+						"y": str(down_row + 1)
 					})
-					down_row = row
-					for down_row in puzzle.grid.down_word_rows(row, col):
-						ET.SubElement(word, "cells", {
-							"x": str(col + 1),
-							"y": str(down_row + 1)
-						})
-					down_clues.append(clue_element(puzzle.down_clues[clue_count], word_count, clue_count))
+				down_clues.append(clue_element(puzzle.down_clues[clue_count], word_count, clue_count))
 	crossword_el.append(across_clues)
 	crossword_el.append(down_clues)
 	ET.ElementTree(root).write(file_path, xml_declaration=True, encoding="utf-8")

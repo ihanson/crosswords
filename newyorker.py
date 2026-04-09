@@ -3,10 +3,9 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import json
-import os.path
 from typing import Any, Iterable, Iterator, TypeVar
 import crossword
-import jpz
+import crossword_nexus
 
 js_expr = re.compile(r"window.__PRELOADED_STATE__ = (?P<json>.*);")
 section_expr = re.compile(r"## (?P<header>[^\n]+)\n\n(?P<value>(?:[^\n]|\n(?!\n##))*)")
@@ -94,15 +93,17 @@ def download_puzzle(
 		}
 		for direction in ["A", "D"]
 	}
-	instructions = sections.get("Help")
+	note = sections.get("Help")
+	date = metadata.get("copyright") or metadata.get("date")
 	return crossword.Puzzle(
 		grid=grid,
 		across=clues_by_dir["A"],
 		down=clues_by_dir["D"],
-		title=metadata["title"],
-		author=metadata["author"],
-		copyright=metadata.get("copyright") or metadata.get("date"),
-		instructions=crossword.FormattableText(html=instructions) if instructions else None
+		title=crossword.FormattableText(metadata["title"]),
+		author=crossword.FormattableText(metadata["author"]),
+		copyright=crossword.FormattableText(date) if date else None,
+		note=crossword.FormattableText(html=note) if note else None,
+		show_note_on_open=note is not None
 	)
 
 def find_game_id(root: list[Any]) -> str | None:
@@ -261,6 +262,4 @@ def assert_not_none(value: T | None) -> T:
 	return value
 
 if __name__ == "__main__":
-	date = datetime.date.today()
-	puzzle = daily_puzzle(date)
-	jpz.save_crossword_jpz(puzzle, os.path.join("puzzles", f"tny {date.isoformat()}.jpz"))
+	crossword_nexus.open_puzzle(daily_puzzle())

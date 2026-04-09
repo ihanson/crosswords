@@ -58,8 +58,8 @@ class CString(object):
 	def bytes(self):
 		return self.__bytes
 
-	def optional(self):
-		return str(self) if len(self) > 0 else None
+	def optional(self) -> crossword.FormattableText | None:
+		return crossword.FormattableText(str(self)) if len(self) > 0 else None
 
 def read_extra_sections(reader: BufferedReader):
 	sections: dict[bytes, bytes] = {}
@@ -82,14 +82,15 @@ def encode_extra_section(name: bytes, data: bytes):
 def encode_circles(grid: crossword.Grid):
 	data: list[int] = []
 	num_circles = 0
-	for row in range(grid.rows):
-		for col in range(grid.cols):
-			square = grid[row, col]
-			if isinstance(square, crossword.WhiteSquare) and (square.is_circled or square.is_shaded):
-				data.append(0x80)
-				num_circles += 1
-			else:
-				data.append(0x00)
+	for (_, square) in grid:
+		if (
+			isinstance(square, crossword.WhiteSquare)
+			and (square.is_circled or (square.color is not None))
+		):
+			data.append(0x80)
+			num_circles += 1
+		else:
+			data.append(0x00)
 	return (num_circles, bytes(data))
 
 def cksum_region(data: bytes, init: int = 0):
@@ -167,20 +168,19 @@ def read_rebuses(grbs: ByteGrid, rtbl: bytes) -> dict[tuple[int, int], str]:
 	}
 
 def load_clues(grid: crossword.Grid, clue_list: list[CString]):
-	across: dict[int, crossword.Clue] = {}
-	down: dict[int, crossword.Clue] = {}
+	across: dict[int, crossword.FormattableText] = {}
+	down: dict[int, crossword.FormattableText] = {}
 	clue_queue = clue_list[::-1]
 	clue_num = 1
-	for row in range(grid.rows):
-		for col in range(grid.cols):
-			is_across = grid.is_across_start(row, col)
-			is_down = grid.is_down_start(row, col)
-			if is_across or is_down:
-				if is_across:
-					across[clue_num] = crossword.Clue(str(clue_queue.pop()))
-				if is_down:
-					down[clue_num] = crossword.Clue(str(clue_queue.pop()))
-				clue_num += 1
+	for ((row, col), _) in grid:
+		is_across = grid.is_across_start(row, col)
+		is_down = grid.is_down_start(row, col)
+		if is_across or is_down:
+			if is_across:
+				across[clue_num] = crossword.FormattableText(str(clue_queue.pop()))
+			if is_down:
+				down[clue_num] = crossword.FormattableText(str(clue_queue.pop()))
+			clue_num += 1
 	return (across, down)
 
 def all_clues(puzzle: crossword.Puzzle):
@@ -192,17 +192,16 @@ def all_clues(puzzle: crossword.Puzzle):
 			is_down = puzzle.grid.is_down_start(row, col)
 			if is_across or is_down:
 				if is_across:
-					clues.append(CString(puzzle.across_clues[clue_num].clue))
+					clues.append(CString(puzzle.across_clues[clue_num].text))
 				if is_down:
-					clues.append(CString(puzzle.down_clues[clue_num].clue))
+					clues.append(CString(puzzle.down_clues[clue_num].text))
 				clue_num += 1
 	return clues
 
 def encode_grid(grid: crossword.Grid, map_func: Callable[[crossword.Square], int]):
 	result: list[int] = []
-	for row in range(grid.rows):
-		for col in range(grid.cols):
-			result.append(map_func(grid[row, col]))
+	for (_, cell) in grid:
+		result.append(map_func(cell))
 	return ByteGrid(bytes(result), grid.cols)
 
 def load_puz(file_path: str) -> crossword.Puzzle:
@@ -263,11 +262,16 @@ def load_puz(file_path: str) -> crossword.Puzzle:
 	(across, down) = load_clues(grid, clues)
 	
 	return crossword.Puzzle(
-		grid, across, down,
-		title.optional(), author.optional(), copyright.optional(), notes.optional()
+		grid=grid,
+		across=across,
+		down=down,
+		title=title.optional(),
+		author=author.optional(),
+		copyright=copyright.optional(),
+		note=notes.optional()
 	)
 
-def save_puz(puzzle: crossword.Puzzle, file_path: str, diagramless=False):
+def save_puz(puzzle: crossword.Puzzle, file_path: str, diagramless: bool = False):
 	num_clues = len(puzzle.across_clues) + len(puzzle.down_clues)
 	cib = struct.pack(
 		"<BBH2sH",
@@ -283,24 +287,22 @@ def save_puz(puzzle: crossword.Puzzle, file_path: str, diagramless=False):
 		puzzle.grid,
 		lambda square: (b"-" if isinstance(square, crossword.WhiteSquare) else b".")[0]
 	)
-	title = CString(puzzle.title or "")
-	author = CString(puzzle.author or "")
-	copyright = CString(puzzle.copyright or "")
+	title = CString(puzzle.title.text if puzzle.title else "")
+	author = CString(puzzle.author.text if puzzle.author else "")
+	copyright = CString(puzzle.copyright.text if puzzle.copyright else "")
 	clues = all_clues(puzzle)
-	notes = CString(puzzle.note or "")
+	notes = CString(puzzle.note.text if puzzle.note else "")
 	rebus_grid: list[int] = []
 	rebuses: list[tuple[int, str]] = []
 	rebus_index = 0
-	for row in range(puzzle.grid.rows):
-		for col in range(puzzle.grid.cols):
-			square = puzzle.grid[row, col]
-			if isinstance(square, crossword.WhiteSquare) and square.answer is not None and len(square.answer) > 1:
-				value = rebus_index + 1
-				rebuses.append((rebus_index, square.answer))
-				rebus_index += 1
-			else:
-				value = 0
-			rebus_grid.append(value)
+	for (_, square) in puzzle.grid:
+		if isinstance(square, crossword.WhiteSquare) and square.answer is not None and len(square.answer) > 1:
+			value = rebus_index + 1
+			rebuses.append((rebus_index, square.answer))
+			rebus_index += 1
+		else:
+			value = 0
+		rebus_grid.append(value)
 	extra_sections = b""
 	if len(rebuses) > 0:
 		extra_sections += encode_extra_section(

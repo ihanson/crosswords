@@ -9,8 +9,10 @@ import base64
 import urllib.parse
 import os
 import sys
+import image
 import jpz
 import nyt_json
+import crossword_nexus
 
 WHITE_SQUARE = 1
 CIRCLED_SQUARE = 2
@@ -41,30 +43,39 @@ def puzzles_for_dates(
 def cell_to_square(cell: nyt_json.Cell | nyt_json.BlackCell) -> crossword.Square:
 	if "type" in cell:
 		cell_type = cell["type"]
+		is_shaded = cell_type == SHADED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE
+		is_circled = cell_type == CIRCLED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE
 		return crossword.WhiteSquare(
 			answer=cell.get("answer"),
-			is_shaded=cell_type == SHADED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE,
-			is_circled=cell_type == CIRCLED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE
+			color=image.Color(0xdc, 0xdc, 0xdc) if is_shaded else None,
+			is_circled=is_circled
 		)
 	else:
 		return crossword.BlackSquare()
 
-def dict_to_clue(clue: nyt_json.Clue) -> crossword.Clue:
-	return crossword.Clue(
-		clue["text"][0]["plain"],
-		clue["text"][0].get("formatted")
+def dict_to_clue(clue: nyt_json.Clue) -> crossword.FormattableText:
+	return crossword.FormattableText(
+		text=clue["text"][0]["plain"],
+		html=clue["text"][0].get("formatted")
 	)
 
 def format_date(date: datetime.date, weekday: bool = True):
 	return f"{date.strftime('%A, %B' if weekday else '%B')} {date.day}, {date.year}"
 
 def download_json(date: datetime.date, publish_type: str, nyt_s: str) -> nyt_json.Puzzle:
-	return requests.get(
-		f"https://www.nytimes.com/svc/crosswords/v6/puzzle/{publish_type}/{date.isoformat()}.json",
+	url = f"https://www.nytimes.com/svc/crosswords/v6/puzzle/{publish_type}/{date.isoformat()}.json"
+	result = requests.get(
+		url,
 		cookies={
 			"NYT-S": nyt_s
 		}
-	).json()
+	)
+	if result.status_code != 200:
+		raise Exception(f"Request to {url} returned HTTP {result.status_code} error")
+	return result.json()
+
+def download_today() -> crossword.Puzzle:
+	return download_puzzle(datetime.date.today(), "daily", token())
 
 def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword.Puzzle:
 	puzzle = download_json(date, publish_type, nyt_s)
@@ -85,9 +96,11 @@ def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> cross
 			int(puzzle_dict["clues"][i]["label"]): dict_to_clue(puzzle_dict["clues"][i])
 			for i in puzzle_dict["clueLists"][1]["clues"]
 		},
-		title=puzzle.get("title"),
-		author=", ".join(puzzle["constructors"]) if "constructors" in puzzle else None,
-		copyright=format_date(datetime.date.fromisoformat(puzzle["publicationDate"])),
+		title=crossword.FormattableText(puzzle.get("title", "The Crossword")),
+		author=crossword.FormattableText(", ".join(puzzle["constructors"])) if "constructors" in puzzle else None,
+		copyright=crossword.FormattableText(format_date(
+			datetime.date.fromisoformat(puzzle["publicationDate"])
+		)),
 		note=puzzle["notes"][0]["text"] if "notes" in puzzle else None
 	)
 
@@ -228,4 +241,4 @@ def token() -> str:
 		return f.read()
 
 if __name__ == "__main__":
-	download_puzzles("puzzles\\New York Times", 1997, 2023, token())
+	crossword_nexus.open_puzzle(download_today())

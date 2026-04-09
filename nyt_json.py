@@ -68,4 +68,5 @@ class Puzzle(TypedDict):
 	id: int
 	lastUpdated: str
 	publicationDate: str
+	title: NotRequired[str]
 	relatedContent: RelatedContent
