@@ -3,9 +3,10 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import json
-from typing import Any, Iterable, Iterator, TypeVar
+from typing import Any, Iterable, Iterator, NamedTuple, TypeVar
 import crossword
 import crossword_nexus
+import image
 
 js_expr = re.compile(r"window.__PRELOADED_STATE__ = (?P<json>.*);")
 section_expr = re.compile(r"## (?P<header>[^\n]+)\n\n(?P<value>(?:[^\n]|\n(?!\n##))*)")
@@ -69,19 +70,22 @@ def download_puzzle(
 			)
 			if match is not None
 		]
-		is_barred = metadata.get("form") == "barred"
-		design = GridDesign(
-			sections["Design"] if is_barred
-			else None
-		)
+		design = GridDesign(sections.get("Design"))
 	except KeyError, ValueError:
 		raise ValueError("Could not parse the New Yorker puzzle")
 	
 	grid = crossword.Grid([
 		[
 			crossword.BlackSquare() if char == "."
-			else crossword.WhiteSquare(char, bars=design.bars(y, x))
-			for (x, char) in enumerate(row)
+			else crossword.WhiteSquare(
+				answer=char,
+				color=d.color,
+				is_circled=d.is_circled,
+				bars=d.bars
+			)
+			for (d, char) in (
+				(design[y, x], char) for (x, char) in enumerate(row)
+			)
 		] for (y, row) in enumerate(sections["Grid"].split("\n"))
 	])
 	clues_by_dir = {
@@ -177,6 +181,19 @@ def advance_to_close(char_iter: Iterator[str]) -> str:
 				return "".join(result)
 	raise ValueError("Unclosed bracket")
 
+class CellDesign(NamedTuple):
+	bars: frozenset[crossword.SquareSide]
+	color: image.Color | None
+	is_circled: bool
+
+	@staticmethod
+	def default():
+		return CellDesign(
+			bars=frozenset(),
+			color=None,
+			is_circled=False
+		)
+
 class GridDesign(object):
 	def __init__(self, design: str | None):
 		self.__grid__ = (
@@ -184,33 +201,29 @@ class GridDesign(object):
 			if design is not None
 			else None
 		)
-	
-	def bars(self, row: int, col: int) -> frozenset[crossword.SquareSide]:
+
+	def __getitem__(self, index: tuple[int, int]):
+		(row, col) = index
 		return (
 			self.__grid__[row][col]
 			if self.__grid__ is not None
-			else frozenset()
+			else CellDesign.default()
 		)
 
 	@staticmethod
-	def __parse_design__(design: str):
+	def __parse_design__(design: str) -> list[list[CellDesign]]:
 		[style_html, grid] = design.strip().split("\n\n")
 		style_soup = BeautifulSoup(style_html, features="html.parser")
 		style = GridDesign.__parse_cssish__(
 			assert_not_none(style_soup.find("style")).text
 		)
-		bar_map = {
-			tag: frozenset([
-				GridDesign.__direction__(prop)
-				for (prop, value) in rules.items()
-				if value == "true"
-			])
+		designs = {
+			tag: GridDesign.__cell_design__(rules)
 			for (tag, rules) in style
 		}
-		empty: frozenset[crossword.SquareSide] = frozenset()
 		return [
 			[
-				bar_map.get(cell, empty)
+				designs.get(cell) or CellDesign.default()
 				for cell in row
 			]
 			for row in grid.strip().split("\n")
@@ -235,6 +248,22 @@ class GridDesign(object):
 			)
 			for line in lines
 		]
+	
+	@staticmethod
+	def __cell_design__(rules: dict[str, str]) -> CellDesign:
+		bars = frozenset([
+			GridDesign.__direction__(prop)
+			for (prop, value) in rules.items()
+			if prop.startswith("bar-") and value == "true"
+		])
+		color_hex = rules.get("background-dark")
+		color = (
+			image.Color.from_hex(color_hex)
+			if color_hex is not None
+			else None
+		)
+		circle = rules.get("background") == "circle"
+		return CellDesign(bars, color, circle)
 	
 	@staticmethod
 	def __direction__(property: str) -> crossword.SquareSide:

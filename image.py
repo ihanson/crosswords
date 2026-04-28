@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 import crossword
+import re
 
 Pixel = tuple[int, int, int, int]
 
@@ -17,6 +18,20 @@ class Color(object):
 
 	def hex(self):
 		return f"#{self.__red:0>2x}{self.__green:0>2x}{self.__blue:0>2x}"
+	
+	@staticmethod
+	def from_hex(hex: str) -> Color:
+		match = Color.__color_expr.match(hex)
+		if match is None:
+			raise ValueError(f"Invalid color: {hex}")
+		(red, green, blue) = match.groups()
+		return Color(
+			int(red, 16),
+			int(green ,16),
+			int(blue, 16)
+		)
+
+	__color_expr = re.compile(r"#([\da-f]{2})([\da-f]{2})([\da-f]{2})", re.I)
 
 	Black: Color
 	White: Color
