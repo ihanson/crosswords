@@ -7,6 +7,7 @@ from typing import Any, Iterable, Iterator, NamedTuple, TypeVar
 import crossword
 import crossword_nexus
 import image
+import sys
 
 js_expr = re.compile(r"window.__PRELOADED_STATE__ = (?P<json>.*);")
 section_expr = re.compile(r"## (?P<header>[^\n]+)\n\n(?P<value>(?:[^\n]|\n(?!\n##))*)")
@@ -290,5 +291,15 @@ def assert_not_none(value: T | None) -> T:
 		raise ValueError("Value is None")
 	return value
 
+def arg_date(argv: list[str]) -> datetime.date:
+	match argv:
+		case [_, date, *_]:
+			try:
+				return datetime.date.fromisoformat(date)
+			except ValueError:
+				return datetime.date.today()
+		case [*_]:
+			return datetime.date.today()
+
 if __name__ == "__main__":
-	crossword_nexus.open_puzzle(daily_puzzle())
+	crossword_nexus.open_puzzle(daily_puzzle(arg_date(sys.argv)))
