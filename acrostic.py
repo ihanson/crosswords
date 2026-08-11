@@ -1,3 +1,6 @@
+from typing import Sequence
+from crossword import FormattableText
+
 class AcrosticSquare(object):
 	def letter(self) -> str:
 		raise NotImplementedError()
@@ -36,9 +39,15 @@ class LetterSquare(AcrosticSquare):
 
 class Acrostic(object):
 	def __init__(
-			self, squares: list[AcrosticSquare], clues: list[str],
-			quote_text: str, quote_author: str, quote_work: str,
-			title: str, author: str, copyright: str
+			self,
+			squares: Sequence[AcrosticSquare],
+			clues: Sequence[FormattableText],
+			title: FormattableText,
+			author: FormattableText,
+			copyright: FormattableText,
+			quote_text: FormattableText,
+			quote_author: FormattableText | None = None,
+			quote_work: FormattableText | None = None,
 		):
 		self.__squares = squares
 		self.__clues = clues

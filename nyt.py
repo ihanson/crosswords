@@ -1,5 +1,6 @@
 import datetime
 import requests
+import babel.dates
 import crossword
 import acrostic
 import string
@@ -59,9 +60,6 @@ def dict_to_clue(clue: nyt_json.Clue) -> crossword.FormattableText:
 		html=clue["text"][0].get("formatted")
 	)
 
-def format_date(date: datetime.date, weekday: bool = True):
-	return f"{date.strftime('%A, %B' if weekday else '%B')} {date.day}, {date.year}"
-
 def download_json(date: datetime.date, publish_type: str, nyt_s: str) -> nyt_json.Puzzle:
 	url = f"https://www.nytimes.com/svc/crosswords/v6/puzzle/{publish_type}/{date.isoformat()}.json"
 	result = requests.get(
@@ -98,9 +96,12 @@ def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> cross
 		},
 		title=crossword.FormattableText(puzzle.get("title", "The Crossword")),
 		author=crossword.FormattableText(", ".join(puzzle["constructors"])) if "constructors" in puzzle else None,
-		copyright=crossword.FormattableText(format_date(
-			datetime.date.fromisoformat(puzzle["publicationDate"])
-		)),
+		copyright=crossword.FormattableText(
+			babel.dates.format_date(
+				datetime.date.fromisoformat(puzzle["publicationDate"]),
+				"full"
+			)
+		),
 		note=puzzle["notes"][0]["text"] if "notes" in puzzle else None
 	)
 
@@ -115,34 +116,6 @@ def download_acrostic(date: datetime.date, nyt_s: str) -> acrostic.Acrostic:
 	assert match is not None
 	b64_data = json.loads(match[1])
 	return json_to_acrostic(urllib.parse.unquote(base64.b64decode(b64_data).decode("ascii")))
-
-def acrostic_to_json(puzzle: acrostic.Acrostic, date: datetime.date) -> str:
-	answer = "".join(square.letter() for square in puzzle.squares)
-	clue_indexes = "".join(
-		string.ascii_uppercase[square.clue_index] if isinstance(square, acrostic.LetterSquare)
-		else square.letter()
-		for square in puzzle.squares
-	)
-	clue_word_indexes = "".join(
-		string.ascii_uppercase[square.clue_word_index] if isinstance(square, acrostic.LetterSquare)
-		else square.letter()
-		for square in puzzle.squares
-	)
-	return json.dumps({
-		"puzzle_data": "\n".join((
-			"".join((answer, clue_indexes, clue_word_indexes)),
-			"|".join(puzzle.clues),
-			"",
-			puzzle.quote_work or "",
-			puzzle.quote_author or "",
-			puzzle.quote_work or ""
-		)),
-		"puzzle_meta": {
-			"title": puzzle.title,
-			"author": puzzle.author,
-			"displayDate": format_date(date, False)
-		}
-	})
 
 def json_to_acrostic(game_json: str) -> acrostic.Acrostic:
 	game_data = json.loads(game_json)

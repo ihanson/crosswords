@@ -3,13 +3,16 @@ import crossword
 import acrostic
 import string
 
-NUM_COLS = 3
+NUM_COLS = 2
 GRID_WORD_ID = "1000"
 ATTRIB_WORD_ID = "1001"
 
-def element_with_raw_html(tag: str, text: crossword.FormattableText):
+def element_with_raw_html(tag: str, text: crossword.FormattableText, attrs: dict[str, str] = {}):
 	xml_ish = f"<{tag}>{text.html}</{tag}>"
-	return ET.fromstring(xml_ish)
+	element = ET.fromstring(xml_ish)
+	for (attr, value) in attrs.items():
+		element.set(attr, value)
+	return element
 
 def clue_element(clue: crossword.FormattableText, word_id: int, clue_number: int):
 	element = element_with_raw_html("clue", clue)
@@ -124,14 +127,18 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 		"xmlns": "http://crossword.info/xml/crossword-compiler"
 	})
 	settings_el = ET.SubElement(root, "applet-settings")
-	attribution = (
-		f"\n\n\u2014 {puzzle.quote_author}, {puzzle.quote_work}" if puzzle.quote_author and puzzle.quote_work
-		else f"\n\n\u2014 {puzzle.quote_work}" if puzzle.quote_work
-		else ""
-	)
-	ET.SubElement(settings_el, "completion", {
-		"only-if-correct": "true"
-	}).text = f"{puzzle.quote_text}{attribution}"
+	settings_el.append(element_with_raw_html(
+		"completion",
+		crossword.FormattableText.from_template(
+			t"{puzzle.quote_text}\n\n\u2014 {puzzle.quote_author}, {puzzle.quote_work}" if puzzle.quote_author and puzzle.quote_work
+			else t"{puzzle.quote_text}\n\n\u2014 {puzzle.quote_work}" if puzzle.quote_work
+			else t"{puzzle.quote_text}\n\n\u2014 {puzzle.quote_author}" if puzzle.quote_author
+			else t"{puzzle.quote_text}"
+		),
+		{
+			"only-if-correct": "true"
+		}
+	))
 	actions_el = ET.SubElement(settings_el, "actions")
 	ET.SubElement(actions_el, "reveal-word")
 	ET.SubElement(actions_el, "reveal-letter")
@@ -140,9 +147,9 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 		"xmlns": "http://crossword.info/xml/rectangular-puzzle"
 	})
 	metadata_el = ET.SubElement(puzzle_el, "metadata")
-	ET.SubElement(metadata_el, "title").text = puzzle.title
-	ET.SubElement(metadata_el, "creator").text = puzzle.author
-	ET.SubElement(metadata_el, "copyright").text = puzzle.copyright
+	metadata_el.append(element_with_raw_html("title", puzzle.title))
+	metadata_el.append(element_with_raw_html("creator", puzzle.author))
+	metadata_el.append(element_with_raw_html("copyright", puzzle.copyright))
 	acrostic_el = ET.SubElement(puzzle_el, "acrostic")
 	col_width = max(
 		square.clue_word_index + 1 for square in puzzle.squares
@@ -211,10 +218,14 @@ def save_acrostic_jpz(puzzle: acrostic.Acrostic, file_path: str):
 			"type": "clue",
 			"solve-state": string.ascii_uppercase[clue_index]
 		})
-		ET.SubElement(clues_el, "clue", {
-			"word": str(clue_index),
-			"number": string.ascii_uppercase[clue_index]
-		}).text = puzzle.clues[clue_index]
+		clues_el.append(element_with_raw_html(
+			"clue",
+			puzzle.clues[clue_index],
+			{
+				"word": str(clue_index),
+				"number": string.ascii_uppercase[clue_index]
+			}
+		))
 		word_el = ET.SubElement(acrostic_el, "word", {
 			"id": str(clue_index)
 		})

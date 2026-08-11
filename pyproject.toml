@@ -5,9 +5,11 @@ description = "Utilities for crossword puzzles"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "bs4>=0.0.2",
+    "babel>=2.18.0",
+    "beautifulsoup4>=4.15.0",
     "lzstring>=1.0.4",
     "pillow>=12.0.0",
+    "pyperclip>=1.11.0",
     "requests>=2.32.5",
     "unidecode>=1.4.0",
 ]

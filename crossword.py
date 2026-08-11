@@ -1,3 +1,5 @@
+import string.templatelib
+import copy
 from enum import Enum
 from typing import Generator, Iterator
 from bs4 import BeautifulSoup
@@ -198,3 +200,19 @@ class FormattableText(object):
 	@property
 	def text(self) -> str:
 		return self.__text
+
+	@staticmethod
+	def from_template(template: string.templatelib.Template) -> FormattableText:
+		soup = BeautifulSoup()
+		text = ""
+		for item in template:
+			if isinstance(item, str):
+				soup.append(item)
+				text += item
+			else:
+				value = item.value
+				if not isinstance(value, FormattableText):
+					raise TypeError(f"Interpolated value {value} is not a FormattableText object")
+				soup.append(copy.copy(value.html))
+				text += value.text
+		return FormattableText(text, soup)
