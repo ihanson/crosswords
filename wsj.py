@@ -5,15 +5,11 @@ import babel.dates
 import json
 import datetime
 import urllib.parse
-from typing import TypedDict, NotRequired
+from typing import Any, TypedDict, NotRequired
 from bs4 import BeautifulSoup
 import crossword
 import acrostic
 import jpz
-
-class WSJCookie(TypedDict):
-	agent: str
-	datadome: str
 
 class NextData(TypedDict):
 	props: NextDataProps
@@ -77,8 +73,8 @@ class AcrosticClue(TypedDict):
 	id: str
 	clue: str
 
-def read_wsj_cookie() -> WSJCookie:
-	code = "copy(JSON.stringify({agent:navigator.userAgent,datadome:new Map(document.cookie.split(\"; \").map(c=>c.split(\"=\"))).get(\"datadome\")}))"
+def read_wsj_headers() -> Any:
+	code = "copy(JSON.stringify({\"User-Agent\":navigator.userAgent,\"Accept-Language\":`${navigator.languages.join(\",\")};q=0.9`,Priority:\"u=0, i\",Cookie:document.cookie}))"
 	pyperclip.copy(code)
 	print("Paste to the console on the WSJ website, then paste the results here:")
 	result = input("> ")
@@ -86,31 +82,23 @@ def read_wsj_cookie() -> WSJCookie:
 		f.write(result)
 	return json.loads(result)
 
-def wsj_cookie() -> WSJCookie:
+def wsj_headers() -> Any:
 	try:
 		with open("wsj.json", encoding="utf-8") as f:
 			return json.load(f)
 	except FileNotFoundError:
-		return read_wsj_cookie()
+		return read_wsj_headers()
 
-def wsj_get_with(url: str, cookie: WSJCookie) -> requests.Response:
-	return requests.get(
-		url,
-		headers={
-			"User-Agent": cookie["agent"]
-		},
-		cookies={
-			"datadome": cookie["datadome"]
-		}
-	)
+def wsj_get_with(url: str, headers: Any) -> requests.Response:
+	return requests.get(url, headers=headers)
 
 class WSJError(Exception): pass
 
 def wsj_get(url: str) -> requests.Response:
-	req = wsj_get_with(url, wsj_cookie())
+	req = wsj_get_with(url, wsj_headers())
 	if req.status_code == 200:
 		return req
-	req = wsj_get_with(url, read_wsj_cookie())
+	req = wsj_get_with(url, read_wsj_headers())
 	if req.status_code == 200:
 		return req
 	raise WSJError(f"Could not read URL {url}")

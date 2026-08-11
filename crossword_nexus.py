@@ -8,7 +8,7 @@ def open_puzzle(puzzle: crossword.Puzzle):
 	webbrowser.open(puzzle_url(puzzle))
 
 def puzzle_url(puzzle: crossword.Puzzle) -> str:
-	return f"https://crosswordnexus.github.io/html5-crossword-solver/#{
+	return f"https://crosswordnexus.com/solve/#{
 		LZString.compressToEncodedURIComponent(
 			json.dumps(clear_nones(to_js_puzzle(puzzle)))
 		)
