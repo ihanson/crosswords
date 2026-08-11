@@ -70,9 +70,9 @@ def clue_nums(grid: crossword.Grid) -> tuple[list[int], list[int]]:
 	across: list[int] = []
 	down: list[int] = []
 	clue_num = 1
-	for ((row, col), _) in grid:
-		is_across = grid.is_across_start(row, col)
-		is_down = grid.is_down_start(row, col)
+	for (coord, _) in grid:
+		is_across = grid.is_across_start(coord)
+		is_down = grid.is_down_start(coord)
 		if is_across or is_down:
 			if is_across:
 				across.append(clue_num)
@@ -83,4 +83,7 @@ def clue_nums(grid: crossword.Grid) -> tuple[list[int], list[int]]:
 
 if __name__ == "__main__":
 	import jpz
-	jpz.save_crossword_jpz(load_text("puzzles/script.txt"), "puzzles/script.jpz")
+	jpz.save_puzzle_jpz(
+		jpz.to_jpz_puzzle(load_text("puzzles/script.txt")),
+		"puzzles/script.jpz"
+	)

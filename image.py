@@ -98,7 +98,7 @@ def draw_grid(
 					anchor = "mm"
 				)
 			for side in crossword.SquareSide:
-				if square.has_bar(side):
+				if side in square.bars:
 					bars.append(border_line(xy, side))
 
 	for xy in bars:

@@ -196,9 +196,12 @@ def acrostic_puzzle(url: str) -> acrostic.Acrostic:
 	)
 
 def main():
+	print("https://www.wsj.com/games/crosswords")
 	url = input("Puzzle URL: ")
 	puzzle = acrostic_puzzle(url)
 	jpz.save_acrostic_jpz(puzzle, f"puzzles\\acrostic.jpz")
+	#puzzle = crossword_puzzle(url)
+	#crossword_nexus.open_puzzle(puzzle)
 
 if __name__ == "__main__":
 	main()

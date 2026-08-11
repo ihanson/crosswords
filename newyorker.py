@@ -5,6 +5,8 @@ import re
 import json
 from typing import Any, Iterable, Iterator, NamedTuple, TypeVar
 import crossword
+from crossword import GridCoord
+import jpz
 import crossword_nexus
 import image
 import sys
@@ -85,7 +87,7 @@ def download_puzzle(
 				bars=d.bars
 			)
 			for (d, char) in (
-				(design[y, x], char) for (x, char) in enumerate(row)
+				(design[GridCoord(y, x)], char) for (x, char) in enumerate(row)
 			)
 		] for (y, row) in enumerate(sections["Grid"].split("\n"))
 	])
@@ -203,7 +205,7 @@ class GridDesign(object):
 			else None
 		)
 
-	def __getitem__(self, index: tuple[int, int]):
+	def __getitem__(self, index: GridCoord):
 		(row, col) = index
 		return (
 			self.__grid__[row][col]
@@ -302,4 +304,4 @@ def arg_date(argv: list[str]) -> datetime.date:
 			return datetime.date.today()
 
 if __name__ == "__main__":
-	crossword_nexus.open_puzzle(daily_puzzle(arg_date(sys.argv)))
+	crossword_nexus.open_puzzle(jpz.to_jpz_puzzle(daily_puzzle(arg_date(sys.argv))))

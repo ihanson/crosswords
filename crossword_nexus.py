@@ -2,12 +2,13 @@ import json
 from lzstring import LZString
 from typing import Any, Literal, TypedDict, NotRequired
 import webbrowser
-import crossword
+from crossword import SquareSide
+import puzzle as generic_puzzle
 
-def open_puzzle(puzzle: crossword.Puzzle):
+def open_puzzle(puzzle: generic_puzzle.Puzzle):
 	webbrowser.open(puzzle_url(puzzle))
 
-def puzzle_url(puzzle: crossword.Puzzle) -> str:
+def puzzle_url(puzzle: generic_puzzle.Puzzle) -> str:
 	return f"https://crosswordnexus.com/solve/#{
 		LZString.compressToEncodedURIComponent(
 			json.dumps(clear_nones(to_js_puzzle(puzzle)))
@@ -16,7 +17,7 @@ def puzzle_url(puzzle: crossword.Puzzle) -> str:
 
 class JSPuzzle(TypedDict):
 	metadata: Metadata
-	cells: list[BlockCell | LetterCell]
+	cells: list[BlockCell | LetterCell | ClueCell | VoidCell]
 	words: list[Word]
 	clues: list[ClueSet]
 
@@ -26,10 +27,11 @@ class Metadata(TypedDict):
 	copyright: str | None
 	description: str | None
 	intro: str | None
+	completion_message: str | None
 	fakeclues: bool
 	realwords: bool
 	autofill: bool
-	crossword_type: Literal["crossword"]
+	crossword_type: Literal["crossword"] | Literal["acrostic"]
 	has_reveal: bool
 	width: int
 	height: int
@@ -38,22 +40,40 @@ class BlockCell(TypedDict):
 	x: int
 	y: int
 	type: Literal["block"]
-	is_void: bool
-	clue: bool
+	is_void: Literal[False]
+	clue: Literal[False]
+
+class VoidCell(TypedDict):
+	x: int
+	y: int
+	type: Literal["void"]
+	is_void: Literal[True]
+	clue: Literal[False]
 
 LetterCell = TypedDict("LetterCell", {
 	"x": int,
 	"y": int,
 	"solution": str | None,
 	"number": str | None,
-	"is_void": bool,
-	"clue": bool,
+	"top_right_number": str | None,
+	"is_void": Literal[False],
+	"clue": Literal[False],
 	"top-bar": bool | None,
 	"bottom-bar": bool | None,
 	"left-bar": bool | None,
 	"right-bar": bool | None,
 	"background-color": str | None,
 	"background-shape": str | None
+})
+
+ClueCell = TypedDict("ClueCell", {
+	"x": int,
+	"y": int,
+	"type": Literal["clue"],
+	"solution": str | None,
+	"is_void": Literal[False],
+	"clue": Literal[True],
+	"letter": str | None
 })
 
 class Word(TypedDict):
@@ -67,101 +87,103 @@ class ClueSet(TypedDict):
 class Clue(TypedDict):
 	text: str
 	word: str
-	number: str
+	number: str | None
 
 class X(TypedDict):
 	a: NotRequired[str]
 
-def to_js_puzzle(puzzle: crossword.Puzzle) -> JSPuzzle:
-	next_cell_number = 1
-	cells: list[BlockCell | LetterCell] = []
-	words: list[Word] = []
-	across_clues: list[Clue] = []
-	down_clues: list[Clue] = []
-	for ((row, col), cell) in puzzle.grid:
-		if isinstance(cell, crossword.WhiteSquare):
-			is_across = puzzle.grid.is_across_start(row, col)
-			is_down = puzzle.grid.is_down_start(row, col)
-			if is_across or is_down:
-				number = next_cell_number
-				next_cell_number += 1
-				if is_across:
-					word_id = str(len(words))
-					words.append(Word(
-						id=word_id,
-						cells=[
-							(word_col, row)
-							for word_col in puzzle.grid.across_word_cols(row, col)
-						]
-					))
-					across_clues.append(Clue(
-						text=str(puzzle.across_clues[number].html),
-						word=word_id,
-						number=str(number)
-					))
-				if is_down:
-					word_id = str(len(words))
-					words.append(Word(
-						id=word_id,
-						cells=[
-							(col, word_row)
-							for word_row in puzzle.grid.down_word_rows(row, col)
-						]
-					))
-					down_clues.append(Clue(
-						text=str(puzzle.down_clues[number].html),
-						word=word_id,
-						number=str(number)
-					))
-			else:
-				number = None
-			cells.append(LetterCell({
-				"x": col,
-				"y": row,
-				"solution": cell.answer,
-				"number": str(number) if number is not None else None,
+def to_js_puzzle(puzzle: generic_puzzle.Puzzle) -> JSPuzzle:
+	metadata = Metadata(
+		title=puzzle.title and str(puzzle.title.html),
+		author=puzzle.creator and str(puzzle.creator.html),
+		copyright=puzzle.copyright and str(puzzle.copyright.html),
+		description=puzzle.note and str(puzzle.note.text.html),
+		intro=(
+			str(puzzle.note.text.html)
+			if puzzle.note and puzzle.note.show_on_open
+			else None
+		),
+		completion_message=puzzle.completion_message and str(puzzle.completion_message.html),
+		fakeclues=False,
+		realwords=False,
+		autofill=False,
+		crossword_type=puzzle.puzzle_type,
+		has_reveal=True,
+		width=puzzle.width(),
+		height=puzzle.height()
+	)
+	cells = [
+		(
+			LetterCell({
+				"x": coord.col,
+				"y": coord.row,
+				"solution": cell.solution,
+				"number": cell.number,
+				"top_right_number": cell.top_right_number,
 				"is_void": False,
 				"clue": False,
-				"top-bar": cell.has_bar(crossword.SquareSide.TOP) or None,
-				"bottom-bar": cell.has_bar(crossword.SquareSide.BOTTOM) or None,
-				"left-bar": cell.has_bar(crossword.SquareSide.LEFT) or None,
-				"right-bar": cell.has_bar(crossword.SquareSide.RIGHT) or None,
+				"top-bar": (SquareSide.TOP in cell.bars) or None,
+				"bottom-bar": (SquareSide.BOTTOM in cell.bars) or None,
+				"left-bar": (SquareSide.LEFT in cell.bars) or None,
+				"right-bar": (SquareSide.RIGHT in cell.bars) or None,
 				"background-color": cell.color.hex() if cell.color else None,
 				"background-shape": "circle" if cell.is_circled else None
-			}))
-		else:
-			cells.append(BlockCell(
-				x=col,
-				y=row,
+			}) if isinstance(cell, generic_puzzle.EntryCell)
+			else ClueCell({
+				"x": coord.col,
+				"y": coord.row,
+				"type": "clue",
+				"clue": True,
+				"is_void": False,
+				"solution": cell.text,
+				"letter": cell.text
+			}) if isinstance(cell, generic_puzzle.ClueCell)
+			else BlockCell(
+				x=coord.col,
+				y=coord.row,
 				type="block",
 				is_void=False,
 				clue=False
-			))
+			) if isinstance(cell, generic_puzzle.BlockCell)
+			else VoidCell(
+				x=coord.col,
+				y=coord.row,
+				type="void",
+				is_void=True,
+				clue=False
+			)
+		)
+		for (coord, cell) in puzzle.grid.items()
+	]
+	words = [
+		Word(
+			id=word.word_id,
+			cells=[
+				(coord.col, coord.row)
+				for coord in word.cells
+			]
+		)
+		for word in puzzle.words
+	]
+	clues = [
+		ClueSet(
+			title=clue_set.title,
+			clue=[
+				Clue(
+					number=clue.number,
+					text=str(clue.text.html),
+					word=clue.word_id
+				)
+				for clue in clue_set.clues
+			]
+		)
+		for clue_set in puzzle.clues
+	]
 	return JSPuzzle(
-		metadata=Metadata(
-			title=puzzle.title and str(puzzle.title.html),
-			author=puzzle.author and str(puzzle.author.html),
-			copyright=puzzle.copyright and str(puzzle.copyright.html),
-			description=puzzle.note and str(puzzle.note.html),
-			intro=(
-				str(puzzle.note.html)
-				if puzzle.note and puzzle.show_note_on_open
-				else None
-			),
-			fakeclues=False,
-			realwords=False,
-			autofill=False,
-			crossword_type="crossword",
-			has_reveal=True,
-			width=puzzle.grid.cols,
-			height=puzzle.grid.rows
-		),
+		metadata=metadata,
 		cells=cells,
 		words=words,
-		clues=[
-			ClueSet(title="Across", clue=across_clues),
-			ClueSet(title="Down", clue=down_clues)
-		]
+		clues=clues,
 	)
 
 def clear_nones(obj: Any) -> Any:

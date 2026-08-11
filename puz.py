@@ -3,6 +3,7 @@ import struct
 from unidecode import unidecode
 from collections.abc import Callable
 import crossword
+from crossword import GridCoord
 
 ENCODING = "ISO-8859-1"
 MAGIC_STRING = b"ACROSS&DOWN\x00"
@@ -24,7 +25,7 @@ class ByteGrid(object):
 	def height(self):
 		return len(self.bytes) // self.width
 
-	def __getitem__(self, index: tuple[int, int]):
+	def __getitem__(self, index: GridCoord):
 		(row, col) = index
 		return self.bytes[row * self.width + col]
 
@@ -152,7 +153,7 @@ def masked_checksums(
 		0x44 ^ ((c_part & 0xff00) >> 8)
 	])
 
-def read_rebuses(grbs: ByteGrid, rtbl: bytes) -> dict[tuple[int, int], str]:
+def read_rebuses(grbs: ByteGrid, rtbl: bytes) -> dict[GridCoord, str]:
 	solutions = {
 		int(key) + 1: value
 		for [key, value] in (
@@ -161,10 +162,15 @@ def read_rebuses(grbs: ByteGrid, rtbl: bytes) -> dict[tuple[int, int], str]:
 			if ":" in entry
 		)
 	}
+	coords = (
+		GridCoord(row, col)
+		for col in range(grbs.width)
+		for row in range(grbs.height)
+	)
 	return {
-		(row, col): solutions[grbs[row, col]]
-		for col in range(grbs.width) for row in range(grbs.height)
-		if grbs[row, col] != 0
+		coord: solutions[grbs[coord]]
+		for coord in coords
+		if grbs[coord] != 0
 	}
 
 def load_clues(grid: crossword.Grid, clue_list: list[CString]):
@@ -172,9 +178,9 @@ def load_clues(grid: crossword.Grid, clue_list: list[CString]):
 	down: dict[int, crossword.FormattableText] = {}
 	clue_queue = clue_list[::-1]
 	clue_num = 1
-	for ((row, col), _) in grid:
-		is_across = grid.is_across_start(row, col)
-		is_down = grid.is_down_start(row, col)
+	for (coord, _) in grid:
+		is_across = grid.is_across_start(coord)
+		is_down = grid.is_down_start(coord)
 		if is_across or is_down:
 			if is_across:
 				across[clue_num] = crossword.FormattableText(str(clue_queue.pop()))
@@ -186,16 +192,15 @@ def load_clues(grid: crossword.Grid, clue_list: list[CString]):
 def all_clues(puzzle: crossword.Puzzle):
 	clues: list[CString] = []
 	clue_num = 1
-	for row in range(puzzle.grid.rows):
-		for col in range(puzzle.grid.cols):
-			is_across = puzzle.grid.is_across_start(row, col)
-			is_down = puzzle.grid.is_down_start(row, col)
-			if is_across or is_down:
-				if is_across:
-					clues.append(CString(puzzle.across_clues[clue_num].text))
-				if is_down:
-					clues.append(CString(puzzle.down_clues[clue_num].text))
-				clue_num += 1
+	for (coord, _) in puzzle.grid:
+		is_across = puzzle.grid.is_across_start(coord)
+		is_down = puzzle.grid.is_down_start(coord)
+		if is_across or is_down:
+			if is_across:
+				clues.append(CString(puzzle.across_clues[clue_num].text))
+			if is_down:
+				clues.append(CString(puzzle.down_clues[clue_num].text))
+			clue_num += 1
 	return clues
 
 def encode_grid(grid: crossword.Grid, map_func: Callable[[crossword.Square], int]):
@@ -250,13 +255,13 @@ def load_puz(file_path: str) -> crossword.Puzzle:
 	) if b"GEXT" in extra_sections else None
 
 	grid = crossword.Grid([[
-		crossword.BlackSquare() if solution[row, col] == 0x2e
+		crossword.BlackSquare() if solution[GridCoord(row, col)] == 0x2e
 		else crossword.WhiteSquare(
 			answer=(
-				rebuses[row, col] if (row, col) in rebuses
-				else bytes([solution[row, col]]).decode(ENCODING)
+				rebuses[GridCoord(row, col)] if (row, col) in rebuses
+				else bytes([solution[GridCoord(row, col)]]).decode(ENCODING)
 			),
-			is_circled=circles is not None and circles[row, col] & 0x80 != 0
+			is_circled=circles is not None and circles[GridCoord(row, col)] & 0x80 != 0
 		) for col in range(width)
 	] for row in range(height)])
 	(across, down) = load_clues(grid, clues)
@@ -335,10 +340,3 @@ def save_puz(puzzle: crossword.Puzzle, file_path: str, diagramless: bool = False
 			writer.write(clue.bytes)
 		writer.write(notes.bytes)
 		writer.write(extra_sections)
-
-if __name__ == "__main__":
-	import nyt
-	import datetime
-	import jpz
-	p = nyt.download_puzzle(datetime.date(2026, 3, 29), "daily", nyt.token())
-	jpz.save_crossword_jpz(p, r"C:\Users\Ira\Downloads\crosswords\nyt 2026-03-29.jpz")

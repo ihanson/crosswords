@@ -1,15 +1,10 @@
+from dataclasses import dataclass
 import string.templatelib
 import copy
 from enum import Enum
-from typing import Generator, Iterator
+from typing import Generator, Iterator, NamedTuple
 from bs4 import BeautifulSoup
 import image
-
-class Square(object):
-	pass
-
-class BlackSquare(Square):
-	pass
 
 class SquareSide(Enum):
 	TOP = 0
@@ -17,109 +12,101 @@ class SquareSide(Enum):
 	BOTTOM = 2
 	LEFT = 3
 
+@dataclass
+class Square:
+	pass
+
+@dataclass
+class BlackSquare(Square):
+	pass
+
+@dataclass
 class WhiteSquare(Square):
-	def __init__(
-			self,
-			answer: str | None = None,
-			color: image.Color | None = None,
-			is_circled: bool = False,
-			bars: frozenset[SquareSide] = frozenset()
-		):
-		self.__answer = answer
-		self.__color = color
-		self.__is_circled = is_circled
-		self.__bars = frozenset(bars)
+	answer: str | None = None
+	color: image.Color | None = None
+	is_circled: bool = False
+	bars: frozenset[SquareSide] = frozenset()
 
-	@property
-	def answer(self):
-		return self.__answer
-
-	@property
-	def color(self):
-		return self.__color
-
-	@property
-	def is_circled(self):
-		return self.__is_circled
-	
-	def has_bar(self, bar: SquareSide):
-		return bar in self.__bars
-
-class Grid(object):
-	def __init__(self, squares: list[list[Square]]):
-		if len(squares) == 0 or len(squares[0]) == 0:
+@dataclass
+class Grid:
+	squares: list[list[Square]]
+	def __post_init__(self):
+		if len(self.squares) == 0 or len(self.squares[0]) == 0:
 			raise Exception("Empty grid")
-		if any(len(row) != len(squares[0]) for row in squares):
+		if any(
+			len(row) != len(self.squares[0])
+			for row in self.squares
+		):
 			raise Exception("Ragged grid")
-		self.__squares = squares
 
-	def __getitem__(self, index: tuple[int, int]):
+	def __getitem__(self, index: GridCoord) -> Square:
 		(row, col) = index
 		if (
 			0 <= row < self.rows
 			and 0 <= col < self.cols
 		):
-			return self.__squares[row][col]
+			return self.squares[row][col]
 		return BlackSquare()
 	
 	@property
 	def rows(self):
-		return len(self.__squares)
+		return len(self.squares)
 	
 	@property
 	def cols(self):
-		return len(self.__squares[0])
+		return len(self.squares[0])
 	
-	def __iter__(self) -> Iterator[tuple[tuple[int, int], Square]]:
+	def __iter__(self) -> Iterator[tuple[GridCoord, Square]]:
 		for row in range(self.rows):
 			for col in range(self.cols):
-				yield ((row, col), self[row, col])
+				coord = GridCoord(row, col)
+				yield (coord, self[coord])
 
-	def word_continues_right(self, row: int, col: int) -> bool:
-		square1 = self[row, col]
-		square2 = self[row, col + 1]
+	def word_continues_right(self, coord: GridCoord) -> bool:
+		square1 = self[coord]
+		square2 = self[coord.right()]
 		return (
 			isinstance(square1, WhiteSquare)
 			and isinstance(square2, WhiteSquare)
-			and not square1.has_bar(SquareSide.RIGHT)
-			and not square2.has_bar(SquareSide.LEFT)
+			and SquareSide.RIGHT not in square1.bars
+			and SquareSide.LEFT not in square2.bars
 		)
 	
-	def word_continues_down(self, row: int, col: int) -> bool:
-		square1 = self[row, col]
-		square2 = self[row + 1, col]
+	def word_continues_down(self, coord: GridCoord) -> bool:
+		square1 = self[coord]
+		square2 = self[coord.down()]
 		return (
 			isinstance(square1, WhiteSquare)
 			and isinstance(square2, WhiteSquare)
-			and not square1.has_bar(SquareSide.BOTTOM)
-			and not square2.has_bar(SquareSide.TOP)
+			and SquareSide.BOTTOM not in square1.bars
+			and SquareSide.TOP not in square2.bars
 		)
 
-	def is_across_start(self, row: int, col: int):
+	def is_across_start(self, coord: GridCoord):
 		return (
-			not self.word_continues_right(row, col - 1)
-			and self.word_continues_right(row, col)
+			not self.word_continues_right(coord.left())
+			and self.word_continues_right(coord)
 		)
 
-	def is_down_start(self, row: int, col: int):
+	def is_down_start(self, coord: GridCoord):
 		return (
-			not self.word_continues_down(row - 1, col)
-			and self.word_continues_down(row, col)
+			not self.word_continues_down(coord.up())
+			and self.word_continues_down(coord)
 		)
 	
-	def across_word_cols(self, row: int, col: int) -> Generator[int]:
-		if self.is_across_start(row, col):
-			yield col
-		while self.word_continues_right(row, col):
-			col += 1
-			yield col
+	def across_word_cells(self, coord: GridCoord) -> Generator[GridCoord]:
+		if not self.is_across_start(coord):
+			return
+		yield coord
+		while self.word_continues_right(coord):
+			yield (coord := coord.right())
 	
-	def down_word_rows(self, row: int, col: int) -> Generator[int]:
-		if self.is_down_start(row, col):
-			yield row
-		while self.word_continues_down(row, col):
-			row += 1
-			yield row
+	def down_word_cells(self, coord: GridCoord) -> Generator[GridCoord]:
+		if not self.is_down_start(coord):
+			return
+		yield coord
+		while self.word_continues_down(coord):
+			yield (coord := coord.down())
 
 class Puzzle(object):
 	def __init__(
@@ -193,6 +180,9 @@ class FormattableText(object):
 		else:
 			raise ValueError("Expected one non-None value")
 
+	def __repr__(self) -> str:
+		return f"FormattableText({self.text!r})"
+
 	@property
 	def html(self) -> BeautifulSoup:
 		return self.__html
@@ -216,3 +206,19 @@ class FormattableText(object):
 				soup.append(copy.copy(value.html))
 				text += value.text
 		return FormattableText(text, soup)
+
+class GridCoord(NamedTuple):
+	row: int
+	col: int
+
+	def up(self):
+		return GridCoord(self.row - 1, self.col)
+
+	def down(self):
+		return GridCoord(self.row + 1, self.col)
+
+	def left(self):
+		return GridCoord(self.row, self.col - 1)
+
+	def right(self):
+		return GridCoord(self.row, self.col + 1)

@@ -187,8 +187,11 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 			try:
 				os.makedirs(path, exist_ok=True)
 				if format_type == "Normal":
-					jpz.save_crossword_jpz(
-						download_puzzle(print_date, publish_type.lower(), nyt_s),
+					jpz.save_puzzle_jpz(
+						jpz.to_jpz_puzzle(download_puzzle(
+							print_date,
+							publish_type.lower(), nyt_s
+						)),
 						os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.jpz")
 					)
 				elif format_type == "PDF":
