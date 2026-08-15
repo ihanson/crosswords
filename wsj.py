@@ -1,6 +1,7 @@
 import string
 import requests
 import pyperclip
+import babel
 import babel.dates
 import json
 import datetime
@@ -133,7 +134,8 @@ def crossword_puzzle(url: str) -> crossword.Puzzle:
 		copyright=crossword.FormattableText(
 			babel.dates.format_date(
 				datetime.date.fromisoformat(puzzle["date"]),
-				format="full"
+				format="full",
+				locale=babel.Locale("en", "US")
 			)
 		),
 		grid=crossword.Grid([
@@ -196,12 +198,11 @@ def acrostic_puzzle(url: str) -> acrostic.Acrostic:
 	)
 
 def main():
+	import crossword_nexus
 	print("https://www.wsj.com/games/crosswords")
 	url = input("Puzzle URL: ")
 	puzzle = acrostic_puzzle(url)
-	jpz.save_acrostic_jpz(puzzle, f"puzzles\\acrostic.jpz")
-	#puzzle = crossword_puzzle(url)
-	#crossword_nexus.open_puzzle(puzzle)
+	crossword_nexus.open_puzzle(jpz.to_jpz_acrostic(puzzle))
 
 if __name__ == "__main__":
 	main()

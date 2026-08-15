@@ -1,5 +1,6 @@
 import datetime
 import requests
+import babel
 import babel.dates
 import crossword
 import acrostic
@@ -99,7 +100,8 @@ def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> cross
 		copyright=crossword.FormattableText(
 			babel.dates.format_date(
 				datetime.date.fromisoformat(puzzle["publicationDate"]),
-				"full"
+				"full",
+				babel.Locale("en", "US")
 			)
 		),
 		note=puzzle["notes"][0]["text"] if "notes" in puzzle else None
@@ -205,8 +207,10 @@ def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: st
 							f.write(answer_data)
 					except: pass
 				elif format_type == "Acrostic":
-					jpz.save_acrostic_jpz(
-						download_acrostic(print_date, nyt_s),
+					jpz.save_puzzle_jpz(
+						jpz.to_jpz_acrostic(
+							download_acrostic(print_date, nyt_s)
+						),
 						os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.jpz")
 					)
 			except Exception as e:
@@ -217,4 +221,4 @@ def token() -> str:
 		return f.read()
 
 if __name__ == "__main__":
-	crossword_nexus.open_puzzle(download_today())
+	crossword_nexus.open_puzzle(jpz.to_jpz_puzzle(download_today()))
