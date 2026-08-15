@@ -3,7 +3,7 @@ import struct
 from unidecode import unidecode
 from collections.abc import Callable
 import crossword
-from crossword import GridCoord
+from lib import FormattableText, GridCoord
 
 ENCODING = "ISO-8859-1"
 MAGIC_STRING = b"ACROSS&DOWN\x00"
@@ -174,8 +174,8 @@ def read_rebuses(grbs: ByteGrid, rtbl: bytes) -> dict[GridCoord, str]:
 	}
 
 def load_clues(grid: crossword.Grid, clue_list: list[CString]):
-	across: dict[int, crossword.FormattableText] = {}
-	down: dict[int, crossword.FormattableText] = {}
+	across: dict[int, FormattableText] = {}
+	down: dict[int, FormattableText] = {}
 	clue_queue = clue_list[::-1]
 	clue_num = 1
 	for (coord, _) in grid:
@@ -183,9 +183,9 @@ def load_clues(grid: crossword.Grid, clue_list: list[CString]):
 		is_down = grid.is_down_start(coord)
 		if is_across or is_down:
 			if is_across:
-				across[clue_num] = crossword.FormattableText(str(clue_queue.pop()))
+				across[clue_num] = FormattableText(str(clue_queue.pop()))
 			if is_down:
-				down[clue_num] = crossword.FormattableText(str(clue_queue.pop()))
+				down[clue_num] = FormattableText(str(clue_queue.pop()))
 			clue_num += 1
 	return (across, down)
 
@@ -207,7 +207,7 @@ def encode_grid(grid: crossword.Grid, map_func: Callable[[crossword.Square], int
 	result: list[int] = []
 	for (_, cell) in grid:
 		result.append(map_func(cell))
-	return ByteGrid(bytes(result), grid.cols)
+	return ByteGrid(bytes(result), grid.cols())
 
 def load_puz(file_path: str) -> crossword.Puzzle:
 	with open(file_path, "rb") as reader:
@@ -268,8 +268,8 @@ def load_puz(file_path: str) -> crossword.Puzzle:
 	
 	return crossword.Puzzle(
 		grid=grid,
-		across=across,
-		down=down,
+		across_clues=across,
+		down_clues=down,
 		title=title.optional(),
 		author=author.optional(),
 		copyright=copyright.optional(),

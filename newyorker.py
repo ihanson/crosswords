@@ -5,11 +5,10 @@ import re
 import json
 from typing import Any, Iterable, Iterator, NamedTuple, TypeVar
 import crossword
-from crossword import GridCoord
-import jpz
 import crossword_nexus
-import image
 import sys
+
+from lib import Color, FormattableText, GridCoord, SquareSide
 
 js_expr = re.compile(r"window.__PRELOADED_STATE__ = (?P<json>.*);")
 section_expr = re.compile(r"## (?P<header>[^\n]+)\n\n(?P<value>(?:[^\n]|\n(?!\n##))*)")
@@ -61,11 +60,11 @@ def download_puzzle(
 			)
 			if data.group("value")
 		}
-		clues: list[tuple[str, int, crossword.FormattableText]] = [
+		clues: list[tuple[str, int, FormattableText]] = [
 			(
 				match.group("direction"),
 				int(match.group("number")),
-				crossword.FormattableText(html=parse_clue(match.group("clue")))
+				FormattableText(html=parse_clue(match.group("clue")))
 			)
 			for match in (
 				clue_expr.fullmatch(line)
@@ -104,12 +103,12 @@ def download_puzzle(
 	date = metadata.get("copyright") or metadata.get("date")
 	return crossword.Puzzle(
 		grid=grid,
-		across=clues_by_dir["A"],
-		down=clues_by_dir["D"],
-		title=crossword.FormattableText(metadata["title"]),
-		author=crossword.FormattableText(metadata["author"]),
-		copyright=crossword.FormattableText(date) if date else None,
-		note=crossword.FormattableText(html=note) if note else None,
+		across_clues=clues_by_dir["A"],
+		down_clues=clues_by_dir["D"],
+		title=FormattableText(metadata["title"]),
+		author=FormattableText(metadata["author"]),
+		copyright=FormattableText(date) if date else None,
+		note=FormattableText(html=note) if note else None,
 		show_note_on_open=note is not None
 	)
 
@@ -185,8 +184,8 @@ def advance_to_close(char_iter: Iterator[str]) -> str:
 	raise ValueError("Unclosed bracket")
 
 class CellDesign(NamedTuple):
-	bars: frozenset[crossword.SquareSide]
-	color: image.Color | None
+	bars: frozenset[SquareSide]
+	color: Color | None
 	is_circled: bool
 
 	@staticmethod
@@ -261,7 +260,7 @@ class GridDesign(object):
 		])
 		color_hex = rules.get("background-dark")
 		color = (
-			image.Color.from_hex(color_hex)
+			Color.from_hex(color_hex)
 			if color_hex is not None
 			else None
 		)
@@ -269,16 +268,16 @@ class GridDesign(object):
 		return CellDesign(bars, color, circle)
 	
 	@staticmethod
-	def __direction__(property: str) -> crossword.SquareSide:
+	def __direction__(property: str) -> SquareSide:
 		match property:
 			case "bar-top":
-				return crossword.SquareSide.TOP
+				return SquareSide.TOP
 			case "bar-right":
-				return crossword.SquareSide.RIGHT
+				return SquareSide.RIGHT
 			case "bar-bottom":
-				return crossword.SquareSide.BOTTOM
+				return SquareSide.BOTTOM
 			case "bar-left":
-				return crossword.SquareSide.LEFT
+				return SquareSide.LEFT
 			case _:
 				raise ValueError(f"Unknown property {property}")
 
@@ -304,4 +303,4 @@ def arg_date(argv: list[str]) -> datetime.date:
 			return datetime.date.today()
 
 if __name__ == "__main__":
-	crossword_nexus.open_puzzle(jpz.to_jpz_puzzle(daily_puzzle(arg_date(sys.argv))))
+	crossword_nexus.open_puzzle(daily_puzzle(arg_date(sys.argv)))

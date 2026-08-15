@@ -1,16 +1,7 @@
 from dataclasses import dataclass
-import string.templatelib
-import copy
-from enum import Enum
-from typing import Generator, Iterator, NamedTuple
-from bs4 import BeautifulSoup
-import image
-
-class SquareSide(Enum):
-	TOP = 0
-	RIGHT = 1
-	BOTTOM = 2
-	LEFT = 3
+from typing import Generator, Iterator
+import jpz
+from lib import Color, FormattableText, GridCoord, SquareSide
 
 @dataclass
 class Square:
@@ -23,7 +14,7 @@ class BlackSquare(Square):
 @dataclass
 class WhiteSquare(Square):
 	answer: str | None = None
-	color: image.Color | None = None
+	color: Color | None = None
 	is_circled: bool = False
 	bars: frozenset[SquareSide] = frozenset()
 
@@ -42,23 +33,21 @@ class Grid:
 	def __getitem__(self, index: GridCoord) -> Square:
 		(row, col) = index
 		if (
-			0 <= row < self.rows
-			and 0 <= col < self.cols
+			0 <= row < self.rows()
+			and 0 <= col < self.cols()
 		):
 			return self.squares[row][col]
 		return BlackSquare()
 	
-	@property
 	def rows(self):
 		return len(self.squares)
 	
-	@property
 	def cols(self):
 		return len(self.squares[0])
 	
 	def __iter__(self) -> Iterator[tuple[GridCoord, Square]]:
-		for row in range(self.rows):
-			for col in range(self.cols):
+		for row in range(self.rows()):
+			for col in range(self.cols()):
 				coord = GridCoord(row, col)
 				yield (coord, self[coord])
 
@@ -108,117 +97,82 @@ class Grid:
 		while self.word_continues_down(coord):
 			yield (coord := coord.down())
 
-class Puzzle(object):
-	def __init__(
-		self,
-		grid: Grid,
-		across: dict[int, FormattableText],
-		down: dict[int, FormattableText],
-		title: FormattableText | None = None,
-		author: FormattableText | None = None,
-		copyright: FormattableText | None = None,
-		note: FormattableText | None = None,
-		show_note_on_open: bool = False
-	):
-		self.__grid = grid
-		self.__across = across
-		self.__down = down
-		self.__title = title
-		self.__author = author
-		self.__copyright = copyright
-		self.__note = note
-		self.__show_note_on_open = show_note_on_open
+@dataclass
+class Puzzle:
+	grid: Grid
+	across_clues: dict[int, FormattableText]
+	down_clues: dict[int, FormattableText]
+	title: FormattableText | None = None
+	author: FormattableText | None = None
+	copyright: FormattableText | None = None
+	note: FormattableText | None = None
+	show_note_on_open: bool = False
 
-	@property
-	def grid(self):
-		return self.__grid
-	
-	@property
-	def title(self):
-		return self.__title
-
-	@property
-	def author(self):
-		return self.__author
-
-	@property
-	def copyright(self):
-		return self.__copyright
-
-	@property
-	def note(self):
-		return self.__note
-	
-	@property
-	def show_note_on_open(self):
-		return self.__show_note_on_open
-	
-	@property
-	def across_clues(self):
-		return self.__across
-	
-	@property
-	def down_clues(self):
-		return self.__down
-
-class FormattableText(object):
-	def __init__(self, text: str | None = None, html: BeautifulSoup | str | None = None):
-		html = BeautifulSoup(html, "html.parser") if isinstance(html, str) else html
-		if text is not None and html is None:
-			self.__text = text
-			self.__html = BeautifulSoup()
-			for (i, line) in enumerate(text.split("\n")):
-				if i > 0:
-					self.__html.append(self.__html.new_tag("br"))
-				self.__html.append(line)
-		elif text is None and html is not None:
-			self.__html = html
-			self.__text = self.__html.getText()
-		elif text is not None and html is not None:
-			self.__html = html
-			self.__text = text
-		else:
-			raise ValueError("Expected one non-None value")
-
-	def __repr__(self) -> str:
-		return f"FormattableText({self.text!r})"
-
-	@property
-	def html(self) -> BeautifulSoup:
-		return self.__html
-
-	@property
-	def text(self) -> str:
-		return self.__text
-
-	@staticmethod
-	def from_template(template: string.templatelib.Template) -> FormattableText:
-		soup = BeautifulSoup()
-		text = ""
-		for item in template:
-			if isinstance(item, str):
-				soup.append(item)
-				text += item
-			else:
-				value = item.value
-				if not isinstance(value, FormattableText):
-					raise TypeError(f"Interpolated value {value} is not a FormattableText object")
-				soup.append(copy.copy(value.html))
-				text += value.text
-		return FormattableText(text, soup)
-
-class GridCoord(NamedTuple):
-	row: int
-	col: int
-
-	def up(self):
-		return GridCoord(self.row - 1, self.col)
-
-	def down(self):
-		return GridCoord(self.row + 1, self.col)
-
-	def left(self):
-		return GridCoord(self.row, self.col - 1)
-
-	def right(self):
-		return GridCoord(self.row, self.col + 1)
+	def to_jpz(self) -> jpz.JPZPuzzle:
+		grid: dict[GridCoord, jpz.Cell] = {}
+		across_clues: list[jpz.Clue] = []
+		down_clues: list[jpz.Clue] = []
+		words: list[jpz.Word] = []
+		word_count = 0
+		clue_count = 0
+		for (coord, xword_cell) in self.grid:
+			is_across = self.grid.is_across_start(coord)
+			is_down = self.grid.is_down_start(coord)
+			number = (
+				(clue_count := clue_count + 1)
+				if is_across or is_down
+				else None
+			)
+			cell = (
+				jpz.EntryCell(
+					solution=xword_cell.answer,
+					number=str(number) if number is not None else None,
+					is_circled=xword_cell.is_circled,
+					color=xword_cell.color,
+					bars=xword_cell.bars
+				)
+				if isinstance(xword_cell, WhiteSquare)
+				else jpz.BlockCell()
+			)
+			grid[coord] = cell
+			if number is not None:
+				for (is_start, clue_dict, gen, clue_list) in [
+					(is_across, self.across_clues, self.grid.across_word_cells, across_clues),
+					(is_down, self.down_clues, self.grid.down_word_cells, down_clues)
+				]:
+					if is_start:
+						word_id = str(word_count := word_count + 1)
+						words.append(jpz.Word(
+							word_id=word_id,
+							cells=list(gen(coord))
+						))
+						clue_list.append(jpz.Clue(
+							word_id=word_id,
+							number=str(number),
+							text=clue_dict[number]
+						))
+		return jpz.JPZPuzzle(
+			title=self.title,
+			creator=self.author,
+			copyright=self.copyright,
+			note=(
+				jpz.Note(
+					text=self.note,
+					show_on_open=self.show_note_on_open
+				)
+				if self.note
+				else None
+			),
+			grid=grid,
+			words=words,
+			clues=[
+				jpz.ClueList(
+					title="Across",
+					clues=across_clues
+				),
+				jpz.ClueList(
+					title="Down",
+					clues=down_clues
+				)
+			]
+		)

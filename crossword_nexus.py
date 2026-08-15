@@ -1,14 +1,16 @@
 import json
 from lzstring import LZString
-from typing import Any, Literal, TypedDict, NotRequired
+from typing import Any, Literal, TypedDict
 import webbrowser
-from crossword import SquareSide
-import puzzle as generic_puzzle
+import crossword
+from lib import SquareSide
+import acrostic
+import jpz
 
-def open_puzzle(puzzle: generic_puzzle.Puzzle):
-	webbrowser.open(puzzle_url(puzzle))
+def open_puzzle(puzzle: crossword.Puzzle | acrostic.Acrostic):
+	webbrowser.open(puzzle_url(puzzle.to_jpz()))
 
-def puzzle_url(puzzle: generic_puzzle.Puzzle) -> str:
+def puzzle_url(puzzle: jpz.JPZPuzzle) -> str:
 	return f"https://crosswordnexus.com/solve/#{
 		LZString.compressToEncodedURIComponent(
 			json.dumps(clear_nones(to_js_puzzle(puzzle)))
@@ -89,10 +91,7 @@ class Clue(TypedDict):
 	word: str
 	number: str | None
 
-class X(TypedDict):
-	a: NotRequired[str]
-
-def to_js_puzzle(puzzle: generic_puzzle.Puzzle) -> JSPuzzle:
+def to_js_puzzle(puzzle: jpz.JPZPuzzle) -> JSPuzzle:
 	metadata = Metadata(
 		title=puzzle.title and str(puzzle.title.html),
 		author=puzzle.creator and str(puzzle.creator.html),
@@ -128,7 +127,7 @@ def to_js_puzzle(puzzle: generic_puzzle.Puzzle) -> JSPuzzle:
 				"right-bar": (SquareSide.RIGHT in cell.bars) or None,
 				"background-color": cell.color.hex() if cell.color else None,
 				"background-shape": "circle" if cell.is_circled else None
-			}) if isinstance(cell, generic_puzzle.EntryCell)
+			}) if isinstance(cell, jpz.EntryCell)
 			else ClueCell({
 				"x": coord.col,
 				"y": coord.row,
@@ -137,14 +136,14 @@ def to_js_puzzle(puzzle: generic_puzzle.Puzzle) -> JSPuzzle:
 				"is_void": False,
 				"solution": cell.text,
 				"letter": cell.text
-			}) if isinstance(cell, generic_puzzle.ClueCell)
+			}) if isinstance(cell, jpz.ClueCell)
 			else BlockCell(
 				x=coord.col,
 				y=coord.row,
 				type="block",
 				is_void=False,
 				clue=False
-			) if isinstance(cell, generic_puzzle.BlockCell)
+			) if isinstance(cell, jpz.BlockCell)
 			else VoidCell(
 				x=coord.col,
 				y=coord.row,

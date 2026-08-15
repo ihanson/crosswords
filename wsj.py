@@ -10,7 +10,7 @@ from typing import Any, TypedDict, NotRequired
 from bs4 import BeautifulSoup
 import crossword
 import acrostic
-import jpz
+from lib import FormattableText
 
 class NextData(TypedDict):
 	props: NextDataProps
@@ -129,9 +129,9 @@ def crossword_puzzle(url: str) -> crossword.Puzzle:
 	puzzle = puzzle_data(puzzle_id)["result"]["data"]["data"]
 
 	return crossword.Puzzle(
-		title=crossword.FormattableText(puzzle["title"]),
-		author=crossword.FormattableText(puzzle["author"]),
-		copyright=crossword.FormattableText(
+		title=FormattableText(puzzle["title"]),
+		author=FormattableText(puzzle["author"]),
+		copyright=FormattableText(
 			babel.dates.format_date(
 				datetime.date.fromisoformat(puzzle["date"]),
 				format="full",
@@ -149,12 +149,12 @@ def crossword_puzzle(url: str) -> crossword.Puzzle:
 			]
 			for row in puzzle["grid"]
 		]),
-		across={
-			clue["number"]: crossword.FormattableText(clue["text"])
+		across_clues={
+			clue["number"]: FormattableText(clue["text"])
 			for clue in puzzle["clues"]["across"]
 		},
-		down={
-			clue["number"]: crossword.FormattableText(clue["text"])
+		down_clues={
+			clue["number"]: FormattableText(clue["text"])
 			for clue in puzzle["clues"]["down"]
 		}
 	)
@@ -173,11 +173,11 @@ def acrostic_puzzle(url: str) -> acrostic.Acrostic:
 	data: AcrosticData = json.loads(wsj_get(data_url).text)
 	[source, quote] = data["copy"]["description"].split("\u2014", 1)
 	return acrostic.Acrostic(
-		title=crossword.FormattableText(data["copy"]["title"]),
-		author=crossword.FormattableText(data["copy"]["setter"]),
-		quote_text=crossword.FormattableText(quote),
-		quote_author=crossword.FormattableText(source),
-		copyright=crossword.FormattableText(data["copy"]["date-publish"]),
+		title=FormattableText(data["copy"]["title"]),
+		author=FormattableText(data["copy"]["setter"]),
+		quote_text=FormattableText(quote),
+		quote_author=FormattableText(source),
+		copyright=FormattableText(data["copy"]["date-publish"]),
 		squares=[
 			acrostic.LetterSquare(
 				answer=solution,
@@ -192,7 +192,7 @@ def acrostic_puzzle(url: str) -> acrostic.Acrostic:
 			)
 		],
 		clues=[
-			crossword.FormattableText(clue["clue"])
+			FormattableText(clue["clue"])
 			for clue in data["settings"]["clues"]
 		]
 	)
@@ -202,7 +202,7 @@ def main():
 	print("https://www.wsj.com/games/crosswords")
 	url = input("Puzzle URL: ")
 	puzzle = acrostic_puzzle(url)
-	crossword_nexus.open_puzzle(jpz.to_jpz_acrostic(puzzle))
+	crossword_nexus.open_puzzle(puzzle)
 
 if __name__ == "__main__":
 	main()

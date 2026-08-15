@@ -1,7 +1,6 @@
 import datetime
 from collections.abc import Generator
 import nyt
-import nyt_json
 import string
 
 def main():
@@ -11,7 +10,7 @@ def main():
 	except KeyboardInterrupt:
 		return
 	cells = puzzle["body"][0]["cells"]
-	white_cells: Generator[nyt_json.Cell] = (cell for cell in cells if "answer" in cell)
+	white_cells: Generator[nyt.Cell] = (cell for cell in cells if "answer" in cell)
 	rebuses = [cell for cell in white_cells if is_rebus(cell)]
 	if len(rebuses) > 0:
 		for cell in rebuses:
@@ -22,7 +21,7 @@ def main():
 
 uppercase = list(string.ascii_uppercase)
 
-def is_rebus(cell: nyt_json.Cell) -> bool:
+def is_rebus(cell: nyt.Cell) -> bool:
 	return cell["answer"] not in uppercase or "moreAnswers" in cell
 
 def token() -> str:

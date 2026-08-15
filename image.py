@@ -1,50 +1,16 @@
 from PIL import Image, ImageDraw, ImageFont
 import crossword
-import re
 
-Pixel = tuple[int, int, int, int]
+from lib import Color, SquareSide
 
-class Color(object):
-	def __init__(self, red: int, green: int, blue: int):
-		self.__red = red
-		self.__green = green
-		self.__blue = blue
-	
-	def to_pixel(self):
-		return (self.__red, self.__green, self.__blue, 0xff)
-
-	def __str__(self):
-		return f"({self.__red}, {self.__green}, {self.__blue})"
-
-	def hex(self):
-		return f"#{self.__red:0>2x}{self.__green:0>2x}{self.__blue:0>2x}"
-	
-	@staticmethod
-	def from_hex(hex: str) -> Color:
-		match = Color.__color_expr.match(hex)
-		if match is None:
-			raise ValueError(f"Invalid color: {hex}")
-		(red, green, blue) = match.groups()
-		return Color(
-			int(red, 16),
-			int(green ,16),
-			int(blue, 16)
-		)
-
-	__color_expr = re.compile(r"#([\da-f]{2})([\da-f]{2})([\da-f]{2})", re.I)
-
-	Black: Color
-	White: Color
-	Gray: Color
-
-Color.Black = Color(0x00, 0x00, 0x00)
-Color.White = Color(0xff, 0xff, 0xff)
-Color.Gray = Color(0x80, 0x80, 0x80)
+Black = Color(0x00, 0x00, 0x00)
+White = Color(0xff, 0xff, 0xff)
+Gray = Color(0x80, 0x80, 0x80)
 
 def square_color(square: crossword.Square) -> Color:
 	return (
-		(square.color or Color.White) if isinstance(square, crossword.WhiteSquare)
-		else Color.Black
+		(square.color or White) if isinstance(square, crossword.WhiteSquare)
+		else Black
 	)
 
 def draw_grid(
@@ -56,8 +22,8 @@ def draw_grid(
 	SIZE_FACTOR = 0.8
 	size *= SCALE
 	FONT_NAME = "arial.ttf"
-	width = size * grid.cols + 1
-	height = size * grid.rows + 1
+	width = size * grid.cols() + 1
+	height = size * grid.rows() + 1
 	image = Image.new("RGBA", (width, height))
 	draw = ImageDraw.Draw(image)
 	font = ImageFont.truetype(FONT_NAME, int(size * SIZE_FACTOR))
@@ -69,14 +35,14 @@ def draw_grid(
 		)
 		draw.rectangle(
 			xy=xy,
-			outline=Color.Gray.to_pixel(),
+			outline=Gray.to_pixel(),
 			fill=square_color(square).to_pixel(),
 			width=SCALE
 		)
 		if isinstance(square, crossword.WhiteSquare) and square.is_circled:
 			draw.ellipse(
 				xy=xy,
-				outline=Color.Black.to_pixel(),
+				outline=Black.to_pixel(),
 				width=SCALE
 			)
 		if isinstance(square, crossword.WhiteSquare):
@@ -88,7 +54,7 @@ def draw_grid(
 						row * size + (size / 2)
 					),
 					text=square.answer,
-					fill = Color.Black.to_pixel(),
+					fill = Black.to_pixel(),
 					font = (
 						font if text_width <= size * SIZE_FACTOR
 						else ImageFont.truetype(
@@ -97,14 +63,14 @@ def draw_grid(
 					),
 					anchor = "mm"
 				)
-			for side in crossword.SquareSide:
+			for side in SquareSide:
 				if side in square.bars:
 					bars.append(border_line(xy, side))
 
 	for xy in bars:
 		draw.line(
 			xy,
-			fill=Color.Black.to_pixel(),
+			fill=Black.to_pixel(),
 			width=4 * SCALE
 		)
 	x = image.resize((width // SCALE, height // SCALE)) # type: ignore
@@ -112,15 +78,15 @@ def draw_grid(
 
 def border_line(
 	corners_xy: tuple[tuple[float, float], tuple[float,float]],
-	side: crossword.SquareSide
+	side: SquareSide
 ) -> tuple[tuple[float, float], tuple[float, float]]:
 	((x1, y1), (x2, y2)) = corners_xy
 	match side:
-		case crossword.SquareSide.TOP:
+		case SquareSide.TOP:
 			return ((x1, y1), (x2, y1))
-		case crossword.SquareSide.RIGHT:
+		case SquareSide.RIGHT:
 			return ((x2, y1), (x2, y2))
-		case crossword.SquareSide.BOTTOM:
+		case SquareSide.BOTTOM:
 			return ((x1, y2), (x2, y2))
-		case crossword.SquareSide.LEFT:
+		case SquareSide.LEFT:
 			return ((x1, y1), (x1, y2))

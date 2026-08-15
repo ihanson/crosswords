@@ -1,26 +1,91 @@
 import datetime
+from typing import Any, Literal, NotRequired, TypedDict
 import requests
 import babel
 import babel.dates
 import crossword
-import acrostic
-import string
-import re
-import json
-import base64
-import urllib.parse
-import os
-import sys
-import image
-import jpz
-import nyt_json
+from lib import Color, FormattableText
 import crossword_nexus
 
 WHITE_SQUARE = 1
 CIRCLED_SQUARE = 2
 SHADED_SQUARE = 3
 CIRCLED_SHADED_SQUARE = 4
-MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+class PuzzleResult(TypedDict):
+	author: str
+	editor: str
+	format_type: str
+	print_date: str
+	publish_type: str
+	puzzle_id: int
+	title: str
+	version: int
+	percent_filled: int
+	solved: bool
+	star: str
+
+class PuzzleList(TypedDict):
+	status: str
+	results: list[PuzzleResult]
+
+class MoreAnswers(TypedDict):
+	valid: list[str]
+
+class Cell(TypedDict):
+	answer: str
+	moreAnswers: NotRequired[MoreAnswers]
+	clues: list[int]
+	label: str
+	type: int
+
+class BlackCell(TypedDict):
+	pass
+
+class ClueList(TypedDict):
+	name: str
+	clues: list[int]
+
+class ClueText(TypedDict):
+	plain: str
+	formatted: NotRequired[str]
+
+class Clue(TypedDict):
+	cells: list[int]
+	direction: str
+	label: str
+	text: list[ClueText]
+
+class Dimensions(TypedDict):
+	height: int
+	width: int
+
+class PuzzleBody(TypedDict):
+	board: str
+	cells: list[Cell | BlackCell]
+	clueLists: list[ClueList]
+	clues: list[Clue]
+	dimensions: Dimensions
+	SVG: dict[str, Any]
+
+class Note(TypedDict):
+	text: str
+
+class RelatedContent(TypedDict):
+	text: str
+	url: str
+
+class Puzzle(TypedDict):
+	body: list[PuzzleBody]
+	constructors: list[str]
+	copyright: str
+	editor: str
+	id: int
+	lastUpdated: str
+	publicationDate: str
+	title: NotRequired[str]
+	notes: NotRequired[list[Note]]
+	relatedContent: RelatedContent
 
 def puzzles_for_dates(
 	start_date: datetime.date,
@@ -28,8 +93,8 @@ def puzzles_for_dates(
 	format_type: str | None = None,
 	publish_type: str | None = None,
 	nyt_s: str | None = None
-) -> list[nyt_json.PuzzleResult]:
-	puzzles: nyt_json.PuzzleList = requests.get(
+) -> list[PuzzleResult]:
+	puzzles: PuzzleList = requests.get(
 		"https://edge.games.nyti.nyt.net/svc/crosswords/v3/puzzles.json",
 		params={
 			"format_type": format_type,
@@ -42,26 +107,26 @@ def puzzles_for_dates(
 	).json()
 	return puzzles["results"] or []
 
-def cell_to_square(cell: nyt_json.Cell | nyt_json.BlackCell) -> crossword.Square:
+def cell_to_square(cell: Cell | BlackCell) -> crossword.Square:
 	if "type" in cell:
 		cell_type = cell["type"]
 		is_shaded = cell_type == SHADED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE
 		is_circled = cell_type == CIRCLED_SQUARE or cell_type == CIRCLED_SHADED_SQUARE
 		return crossword.WhiteSquare(
 			answer=cell.get("answer"),
-			color=image.Color(0xdc, 0xdc, 0xdc) if is_shaded else None,
+			color=Color(0xdc, 0xdc, 0xdc) if is_shaded else None,
 			is_circled=is_circled
 		)
 	else:
 		return crossword.BlackSquare()
 
-def dict_to_clue(clue: nyt_json.Clue) -> crossword.FormattableText:
-	return crossword.FormattableText(
+def dict_to_clue(clue: Clue) -> FormattableText:
+	return FormattableText(
 		text=clue["text"][0]["plain"],
 		html=clue["text"][0].get("formatted")
 	)
 
-def download_json(date: datetime.date, publish_type: str, nyt_s: str) -> nyt_json.Puzzle:
+def download_json(date: datetime.date, publish_type: str, nyt_s: str) -> Puzzle:
 	url = f"https://www.nytimes.com/svc/crosswords/v6/puzzle/{publish_type}/{date.isoformat()}.json"
 	result = requests.get(
 		url,
@@ -76,7 +141,11 @@ def download_json(date: datetime.date, publish_type: str, nyt_s: str) -> nyt_jso
 def download_today() -> crossword.Puzzle:
 	return download_puzzle(datetime.date.today(), "daily", token())
 
-def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> crossword.Puzzle:
+def download_puzzle(
+	date: datetime.date,
+	publish_type: Literal["daily"] | Literal["mini"] | Literal["midi"] | Literal["bonus"],
+	nyt_s: str
+) -> crossword.Puzzle:
 	puzzle = download_json(date, publish_type, nyt_s)
 	puzzle_dict = puzzle["body"][0]
 	width = puzzle_dict["dimensions"]["width"]
@@ -87,138 +156,39 @@ def download_puzzle(date: datetime.date, publish_type: str, nyt_s: str) -> cross
 			[cell_to_square(puzzle_dict["cells"][row * width + col]) for col in range(width)]
 			for row in range(height)
 		]),
-		across={
+		across_clues={
 			int(puzzle_dict["clues"][i]["label"]): dict_to_clue(puzzle_dict["clues"][i])
 			for i in puzzle_dict["clueLists"][0]["clues"]
 		},
-		down={
+		down_clues={
 			int(puzzle_dict["clues"][i]["label"]): dict_to_clue(puzzle_dict["clues"][i])
 			for i in puzzle_dict["clueLists"][1]["clues"]
 		},
-		title=crossword.FormattableText(puzzle.get("title", "The Crossword")),
-		author=crossword.FormattableText(", ".join(puzzle["constructors"])) if "constructors" in puzzle else None,
-		copyright=crossword.FormattableText(
+		title=FormattableText(puzzle.get("title", "The Crossword")),
+		author=FormattableText(", ".join(puzzle["constructors"])) if "constructors" in puzzle else None,
+		copyright=FormattableText(
 			babel.dates.format_date(
 				datetime.date.fromisoformat(puzzle["publicationDate"]),
 				"full",
 				babel.Locale("en", "US")
 			)
 		),
-		note=puzzle["notes"][0]["text"] if "notes" in puzzle else None
+		note=puzzle_note(puzzle)
 	)
 
-def download_acrostic(date: datetime.date, nyt_s: str) -> acrostic.Acrostic:
-	html_data = requests.get(
-		f"https://www.nytimes.com/puzzles/acrostic/{date.year:0>4}/{date.month:0>2}/{date.day:0>2}",
-		cookies={
-			"NYT-S": nyt_s
-		}
-	).text
-	match = re.search(r"window\.gameData\s+=\s+(\".*?\")", html_data)
-	assert match is not None
-	b64_data = json.loads(match[1])
-	return json_to_acrostic(urllib.parse.unquote(base64.b64decode(b64_data).decode("ascii")))
-
-def json_to_acrostic(game_json: str) -> acrostic.Acrostic:
-	game_data = json.loads(game_json)
-	puzzle_data = game_data["puzzle_data"].split("\n")
-	letter_line = puzzle_data[0]
-	length = len(letter_line) // 3
-	letters = list(zip(
-		letter_line[:length],
-		letter_line[length:length * 2],
-		letter_line[length * 2:]
-	))
-	clues = puzzle_data[1].strip("|").split("|")
-	return acrostic.Acrostic(
-		squares=[
-			acrostic.LetterSquare(
-				char,
-				ord(clue_index) - 65,
-				ord(word_index) - 65
-			) if clue_index in string.ascii_uppercase
-			else acrostic.PunctuationSquare(char)
-			for (char, clue_index, word_index) in letters
-		],
-		clues=clues,
-		quote_text=puzzle_data[3],
-		quote_author=puzzle_data[4],
-		quote_work=puzzle_data[5],
-		title=game_data["puzzle_meta"]["title"],
-		author=game_data["puzzle_meta"]["author"],
-		copyright=game_data["puzzle_meta"]["displayDate"]
-	)
-
-def pdf_data(date: datetime.date, publish_type: str, answer: bool, nyt_s: str) -> bytes:
-	date_str = MONTHS[date.month - 1] + date.strftime("%d%y")
-	publish_ext = ".2" if publish_type == "Variety" else ".3" if publish_type == "Assorted" else ""
-	answer_ext = ".ans" if answer else ""
-	url = f"https://www.nytimes.com/svc/crosswords/v2/puzzle/print/{date_str}{publish_ext}{answer_ext}.pdf"
-	response = requests.get(url, cookies = {
-		"nyt-s": nyt_s
-	})
-	if response.status_code != 200:
-		raise Exception(f"Could not download {url}")
-	return response.content
-
-def safe_filename(name: str) -> str:
-	return re.sub(r"[^\w. -]", "_", name.strip())
-
-def download_puzzles(destination: str, start_year: int, end_year: int, nyt_s: str):
-	for year in range(start_year, end_year + 1):
-		year_start = datetime.date(year, 1, 1)
-		year_end = datetime.date(year, 12, 31)
-		puzzles = (
-			puzzles_for_dates(year_start, year_end, publish_type="bonus", nyt_s=nyt_s)
-			+ puzzles_for_dates(year_start, year_end, format_type="acrostic", nyt_s=nyt_s)
-			+ puzzles_for_dates(year_start, year_end, format_type="pdf,normal,diagramless", publish_type="variety,assorted", nyt_s=nyt_s)
-		)
-		for puzzle in puzzles:
-			print_date = datetime.date.fromisoformat(puzzle["print_date"])
-			format_type = puzzle["format_type"]
-			publish_type = puzzle["publish_type"]
-			title = puzzle["title"]
-			path = os.path.join(
-				destination,
-				"PDFs" if format_type == "PDF" or format_type == "Diagramless"
-					else "Bonus" if publish_type == "Bonus"
-					else "Acrostic" if format_type == "Acrostic"
-					else "Variety",
-				f"{print_date.year}"
-			)
-			try:
-				os.makedirs(path, exist_ok=True)
-				if format_type == "Normal":
-					jpz.save_puzzle_jpz(
-						jpz.to_jpz_puzzle(download_puzzle(
-							print_date,
-							publish_type.lower(), nyt_s
-						)),
-						os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.jpz")
-					)
-				elif format_type == "PDF":
-					with open(os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.pdf"), "wb") as f:
-						f.write(pdf_data(print_date, publish_type, False, nyt_s))
-					try:
-						answer_data = pdf_data(print_date, publish_type, True, nyt_s)
-						answer_dir = os.path.join(path, "Answers")
-						os.makedirs(answer_dir, exist_ok=True)
-						with open(os.path.join(answer_dir, f"{print_date.isoformat()} {safe_filename(title)} Answer.pdf"), "wb") as f:
-							f.write(answer_data)
-					except: pass
-				elif format_type == "Acrostic":
-					jpz.save_puzzle_jpz(
-						jpz.to_jpz_acrostic(
-							download_acrostic(print_date, nyt_s)
-						),
-						os.path.join(path, f"{print_date.isoformat()} {safe_filename(title)}.jpz")
-					)
-			except Exception as e:
-				sys.stderr.write(f"Error downloading puzzle {title} for {print_date.isoformat()}: {e}\n")
+def puzzle_note(puzzle: Puzzle) -> FormattableText | None:
+	if "notes" not in puzzle:
+		return None
+	notes = puzzle["notes"]
+	match notes:
+		case [note, *_]:
+			return FormattableText(note["text"])
+		case _:
+			return None
 
 def token() -> str:
 	with open("nyt-s.txt", encoding="utf-8") as f:
 		return f.read()
 
 if __name__ == "__main__":
-	crossword_nexus.open_puzzle(jpz.to_jpz_puzzle(download_today()))
+	crossword_nexus.open_puzzle(download_today())

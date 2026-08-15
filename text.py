@@ -1,4 +1,5 @@
 import crossword
+from lib import FormattableText
 
 def load_text(file_path: str) -> crossword.Puzzle:
 	with open(file_path, "r", encoding="utf-8") as reader:
@@ -18,30 +19,30 @@ def load_text(file_path: str) -> crossword.Puzzle:
 			] for row in grid_text
 		])
 		(across_nums, down_nums) = clue_nums(grid)
-		across: dict[int, crossword.FormattableText] = {}
-		down: dict[int, crossword.FormattableText] = {}
+		across: dict[int, FormattableText] = {}
+		down: dict[int, FormattableText] = {}
 		for clue in across_nums:
 			across[clue] = parse_clue(reader.readline())
 		for clue in down_nums:
 			down[clue] = parse_clue(reader.readline())
 		return crossword.Puzzle(
 			grid=grid,
-			across=across,
-			down=down,
-			title=crossword.FormattableText(title) if title else None,
-			author=crossword.FormattableText(author) if author else None,
-			copyright=crossword.FormattableText(copyright) if copyright else None,
-			note=crossword.FormattableText(note) if note else None
+			across_clues=across,
+			down_clues=down,
+			title=FormattableText(title) if title else None,
+			author=FormattableText(author) if author else None,
+			copyright=FormattableText(copyright) if copyright else None,
+			note=FormattableText(note) if note else None
 		)
 
 def parse_clue(clue_line: str):
 	pieces = clue_line.strip("\r\n").split("|")
 	if len(pieces) == 1:
 		[text] = pieces
-		return crossword.FormattableText(text)
+		return FormattableText(text)
 	elif len(pieces) == 2:
 		[text, html] = pieces
-		return crossword.FormattableText(text, html)
+		return FormattableText(text, html)
 	raise ValueError("Clue line is not in the form text|html")
 
 def save_text(puzzle: crossword.Puzzle, file_path: str):
@@ -82,8 +83,4 @@ def clue_nums(grid: crossword.Grid) -> tuple[list[int], list[int]]:
 	return (across, down)
 
 if __name__ == "__main__":
-	import jpz
-	jpz.save_puzzle_jpz(
-		jpz.to_jpz_puzzle(load_text("puzzles/script.txt")),
-		"puzzles/script.jpz"
-	)
+	load_text("puzzles/script.txt").to_jpz().save("puzzles/script.jpz")
