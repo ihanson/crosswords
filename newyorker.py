@@ -21,10 +21,11 @@ def puzzle_url(date: datetime.date, puzzle_type: str = "crossword"):
 	return f"https://www.newyorker.com/puzzles-and-games-dept/{puzzle_type}/{date.year:04}/{date.month:02}/{date.day:02}"
 
 def download_puzzle(
-	url: str,
+	url: str
 ) -> crossword.Puzzle:
+	text = requests.get(url).text
 	page = BeautifulSoup(
-		requests.get(url).text,
+		text,
 		features="html.parser"
 	)
 	script_tags = page.find_all("script")
@@ -46,10 +47,12 @@ def download_puzzle(
 	).json()
 	if puzzle["gameType"] != "crossword":
 		raise ValueError("Not a crossword puzzle")
-	puzzle_data: str = puzzle["data"]
+	return parse_xd(puzzle["data"])
+
+def parse_xd(xd: str) -> crossword.Puzzle:
 	sections: dict[str, str] = {
 		match.group("header"): match.group("value")
-		for match in section_expr.finditer(puzzle_data)
+		for match in section_expr.finditer(xd)
 	}
 	try:
 		metadata = {
@@ -60,6 +63,18 @@ def download_puzzle(
 			)
 			if data.group("value")
 		}
+		rebus_str: str | None = metadata.get("rebus")
+		rebuses = (
+			{
+				key: value
+				for [key, value] in (
+					rebus.split("=", 1)
+					for rebus in rebus_str.split(" ")
+				)
+			}
+			if rebus_str is not None
+			else {}
+		)
 		clues: list[tuple[str, int, FormattableText]] = [
 			(
 				match.group("direction"),
@@ -80,7 +95,11 @@ def download_puzzle(
 		[
 			crossword.BlackSquare() if char == "."
 			else crossword.WhiteSquare(
-				answer=char,
+				answer=(
+					None if char == "*"
+					else rebuses[char] if char in rebuses
+					else char
+				),
 				color=d.color,
 				is_circled=d.is_circled,
 				bars=d.bars
@@ -121,15 +140,11 @@ def find_game_id(root: list[Any]) -> str | None:
 			}
 		}]:
 			return game_id
-		case [_, {}, *rest]:
+		case [_, {}, *rest] | [_, *rest]:
 			return first_not_none(
-				find_game_id(tag)
-				for tag in rest
-			)
-		case [_, *rest]:
-			return first_not_none(
-				find_game_id(tag)
-				for tag in rest
+				find_game_id(child) # type: ignore
+				for child in rest
+				if isinstance(child, list)
 			)
 		case _:
 			raise ValueError("Unexpected pattern")
@@ -154,19 +169,84 @@ def parse_clue(clue: str) -> BeautifulSoup:
 def parse_brackets(bracketed: str) -> BeautifulSoup:
 	match = assert_not_none(bracket_expr.fullmatch(bracketed))
 	symbol: str = match.group("symbol")
-	contents: str = match.group("contents")
+	contents = assert_not_none(match.group("contents"))
+	match symbol:
+		case "/":
+			return tag("span", parse_clue(contents), {"font-style": "italic"})
+		case "_":
+			return tag("span", parse_clue(contents), {"text-decoration": "underline"})
+		case "*":
+			return tag("span", parse_clue(contents), {"font-weight": "bold"})
+		case "-":
+			return tag("span", parse_clue(contents), {"text-decoration": "line-through"})
+		case "~":
+			return tag("sub", parse_clue(contents))
+		case "^":
+			return tag("sup", parse_clue(contents))
+		case "@":
+			[inner, href] = contents.split("|", 1)
+			return tag("a", parse_clue(inner), attrs={
+				"href": href
+			})
+		case "!":
+			(is_block, rest) = (
+				(True, contents[1:]) if contents.startswith("!")
+				 else (False, contents)
+			)
+			(url, _, size) = parse_img(rest[1:-1].split("|"))
+			(width, height) = normalize_size(size, 64)
+			return tag(
+				"span",
+				style={
+					"display": "block" if is_block else "inline-block",
+					"width": f"{width}px",
+					"height": f"{height}px",
+					"background-image": f"url({url})",
+					"background-size": f"{width}px, {height}px"
+				}
+			)
+		case "#":
+			[inner, color, _] = contents.split("|")
+			return tag("span", parse_clue(inner), style={"color": color})
+		case _:
+			raise ValueError(f"Unknown symbol {symbol}")
+
+def parse_img(img_props: list[str]) -> tuple[str, str | None, tuple[int, int] | None]:
+	match img_props:
+		case [url, alt, width, height, *_]:
+			return (url, alt, (int(width), int(height)))
+		case [url, alt, _] | [url, alt]:
+			return (url, alt, None)
+		case [url]:
+			return (url, None, None)
+		case _:
+			raise ValueError("Image URL is required")
+
+def normalize_size(size: tuple[int, int] | None, norm_height: int) -> tuple[int, int]:
+	(width, height) = size or (norm_height, norm_height)
+	return (
+		(width, height) if height <= norm_height
+		else (
+			int(width * (norm_height / height)),
+			int(height * (norm_height / height))
+		)
+	)
+
+def tag(
+	element: str,
+	contents: BeautifulSoup | None = None,
+	style: dict[str, str] = {},
+	attrs: dict[str, str] | None = None
+) -> BeautifulSoup:
 	soup = BeautifulSoup()
-	try:
-		(prop, val) = {
-			"/": ("font-style", "italic"),
-			"_": ("text-decoration", "underline"),
-			"*": ("font-weight", "bold")
-		}[symbol]
-	except KeyError:
-		raise ValueError(f"Unknown symbol {symbol}")
-	node = soup.new_tag("span")
-	node["style"] = f"{prop}:{val}"
-	node.append(parse_clue(contents))
+	node = soup.new_tag(element, attrs=attrs)
+	if len(style) > 0:
+		node["style"] = "".join(
+			f"{prop}:{value};"
+			for (prop, value) in style.items()
+		)
+	if contents:
+		node.append(contents)
 	soup.append(node)
 	return soup
 
@@ -281,10 +361,13 @@ class GridDesign(object):
 			case _:
 				raise ValueError(f"Unknown property {property}")
 
-def daily_puzzle(date: datetime.date | None = None):
+def daily_puzzle(date: datetime.date | None = None, puzzle_type: str | None = None):
 	date = date or datetime.date.today()
-	puzzle_type = "mini-crossword" if date.weekday() >= 3 else "crossword"
-	return download_puzzle(f"https://www.newyorker.com/puzzles-and-games-dept/{puzzle_type}/{date.year:04}/{date.month:02}/{date.day:02}")
+	url_type = puzzle_type or (
+		"mini-crossword" if date.weekday() >= 3
+		else "crossword"
+	)
+	return download_puzzle(f"https://www.newyorker.com/puzzles-and-games-dept/{url_type}/{date.year:04}/{date.month:02}/{date.day:02}")
 
 T = TypeVar("T")
 def assert_not_none(value: T | None) -> T:
@@ -292,15 +375,29 @@ def assert_not_none(value: T | None) -> T:
 		raise ValueError("Value is None")
 	return value
 
-def arg_date(argv: list[str]) -> datetime.date:
+K = TypeVar("K")
+def remove_nones(dictionary: dict[K, T | None]) -> dict[K, T]:
+	return {
+		key: value
+		for (key, value) in dictionary.items()
+		if value is not None
+	}
+
+def parse_args(argv: list[str]) -> tuple[datetime.date, str | None]:
 	match argv:
-		case [_, date, *_]:
+		case [_, date, *rest]:
 			try:
-				return datetime.date.fromisoformat(date)
+				date = datetime.date.fromisoformat(date)
+				match rest:
+					case [puzzle_type, *_]:
+						return (date, puzzle_type)
+					case _:
+						return (date, None)
 			except ValueError:
-				return datetime.date.today()
+				return (datetime.date.today(), None)
 		case [*_]:
-			return datetime.date.today()
+			return (datetime.date.today(), None)
 
 if __name__ == "__main__":
-	crossword_nexus.open_puzzle(daily_puzzle(arg_date(sys.argv)))
+	(date, puzzle_type) = parse_args(sys.argv)
+	crossword_nexus.open_puzzle(daily_puzzle(date, puzzle_type))
