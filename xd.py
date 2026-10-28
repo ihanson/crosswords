@@ -29,6 +29,7 @@ class XDCrossword:
 	clues: XDClues
 	design: XDDesign | None
 	note: FormattableText | None
+	completion_message: FormattableText | None
 	other_sections: dict[str, str]
 
 	@staticmethod
@@ -52,7 +53,9 @@ class XDCrossword:
 		)
 		note_section = sections.pop("help", None)
 		note = FormattableText(html=note_section) if note_section else None
-		return XDCrossword(metadata, grid, clues, design, note, sections)
+		comp_msg_section = sections.pop("end message", None)
+		comp_msg = FormattableText(html=comp_msg_section) if comp_msg_section else None
+		return XDCrossword(metadata, grid, clues, design, note, comp_msg, sections)
 
 	def designed_cells(self) -> list[list[tuple[str, XDStyleRules]]]:
 		design = self.design or XDDesign({}, self.grid)
@@ -97,7 +100,8 @@ class XDCrossword:
 			author=FormattableText(self.metadata.values["author"]),
 			copyright=FormattableText(date) if date else None,
 			note=self.note,
-			show_note_on_open=self.note is not None
+			show_note_on_open=self.note is not None,
+			completion_message=self.completion_message
 		)
 
 @dataclass

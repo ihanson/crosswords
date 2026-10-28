@@ -107,6 +107,7 @@ class Puzzle:
 	copyright: FormattableText | None = None
 	note: FormattableText | None = None
 	show_note_on_open: bool = False
+	completion_message: FormattableText | None = None
 
 	def to_jpz(self) -> jpz.JPZPuzzle:
 		grid: dict[GridCoord, jpz.Cell] = {}
@@ -163,6 +164,7 @@ class Puzzle:
 				if self.note
 				else None
 			),
+			completion_message=self.completion_message,
 			grid=grid,
 			words=words,
 			clues=[
