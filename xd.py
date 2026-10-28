@@ -28,7 +28,7 @@ class XDCrossword:
 	grid: list[list[str]]
 	clues: XDClues
 	design: XDDesign | None
-	note: XDText | None
+	note: FormattableText | None
 	other_sections: dict[str, str]
 
 	@staticmethod
@@ -50,12 +50,8 @@ class XDCrossword:
 			if design_section is not None
 			else None
 		)
-		help_section = sections.pop("help", None)
-		note = (
-			XDText.parse(help_section)
-			if help_section is not None
-			else None
-		)
+		note_section = sections.pop("help", None)
+		note = FormattableText(html=note_section) if note_section else None
 		return XDCrossword(metadata, grid, clues, design, note, sections)
 
 	def designed_cells(self) -> list[list[tuple[str, XDStyleRules]]]:
@@ -100,7 +96,7 @@ class XDCrossword:
 			title=FormattableText(self.metadata.values["title"]),
 			author=FormattableText(self.metadata.values["author"]),
 			copyright=FormattableText(date) if date else None,
-			note=FormattableText(html=self.note.to_soup()) if self.note else None,
+			note=self.note,
 			show_note_on_open=self.note is not None
 		)
 
@@ -306,8 +302,8 @@ class XDLink(XDContent):
 class XDImage(XDContent):
 	src: str
 	alt: str | None = None
-	height: int | None = None
 	width: int | None = None
+	height: int | None = None
 	is_block: bool = False
 
 	@staticmethod
@@ -338,7 +334,7 @@ class XDImage(XDContent):
 				"width": f"{width}px",
 				"height": f"{height}px",
 				"background-image": f"url({self.src})",
-				"background-size": f"{width}px, {height}px"
+				"background-size": f"{width}px {height}px"
 			}
 		)
 
