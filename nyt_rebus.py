@@ -1,5 +1,4 @@
 import datetime
-from collections.abc import Generator
 import nyt
 import string
 
@@ -10,19 +9,28 @@ def main():
 	except KeyboardInterrupt:
 		return
 	cells = puzzle["body"][0]["cells"]
-	white_cells: Generator[nyt.Cell] = (cell for cell in cells if "answer" in cell)
-	rebuses = [cell for cell in white_cells if is_rebus(cell)]
+	white_cells = (cell for cell in cells if "type" in cell)
+	answers = (possible_answers(cell) for cell in white_cells)
+	rebuses = [a for a in answers if is_rebus(a)]
 	if len(rebuses) > 0:
-		for cell in rebuses:
-			moreAnswers = cell["moreAnswers"]["valid"] if "moreAnswers" in cell else []
-			print(" ".join(f"[{answer}]" for answer in [cell["answer"], *moreAnswers]))
+		for rebus in rebuses:
+			print(" ".join(f"[{answer}]" for answer in rebus))
 	else:
 		print("There are no rebuses in this puzzle.")
 
-uppercase = list(string.ascii_uppercase)
+uppercase = set(string.ascii_uppercase)
 
-def is_rebus(cell: nyt.Cell) -> bool:
-	return cell["answer"] not in uppercase or "moreAnswers" in cell
+def possible_answers(cell: nyt.Cell) -> list[str]:
+	return [
+		cell.get("answer", ""),
+		*cell.get("moreAnswers", {"valid": []})["valid"]
+	]
+
+def is_rebus(answers: list[str]) -> bool:
+	match answers:
+		case [a]: return a not in uppercase
+		case _: return True
+		
 
 def token() -> str:
 	try:

@@ -33,10 +33,10 @@ class MoreAnswers(TypedDict):
 	valid: list[str]
 
 class Cell(TypedDict):
-	answer: str
+	answer: NotRequired[str]
 	moreAnswers: NotRequired[MoreAnswers]
 	clues: list[int]
-	label: str
+	label: NotRequired[str]
 	type: int
 
 class BlackCell(TypedDict):
